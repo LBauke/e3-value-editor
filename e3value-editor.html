@@ -164,7 +164,7 @@
       <tr><td>Wertaustausch</td><td>Werkzeug wählen und von Port zu Port ziehen. Zwischen Akteuren: ausgehend → eingehend, mit Wertobjekt als Beschriftung. Zwischen Akteur und eigener Aktivität: gleiche Richtung (Weiterführung).</td></tr>
       <tr><td>Stimulus</td><td>Start (roter Punkt) löst ein Wertszenario aus, Stopp (Punkt mit Ring) beendet es.</td></tr>
       <tr><td>Verbindungselement</td><td>Gepunktete Linie innerhalb eines Akteurs: von Stimulus zu Schnittstelle oder von Schnittstelle zu Schnittstelle ziehen.</td></tr>
-      <tr><td>Notiz / Markierung</td><td>Freier Text, roter Pfeil und rotes Kreuz zum Kommentieren (z. B. „Supply-Side Bundling“).</td></tr>
+      <tr><td>Notiz</td><td>Freier Text zum Kommentieren (z. B. „Supply-Side Bundling“).</td></tr>
       <tr><td>Ansicht</td><td>Mausrad zoomt, Ziehen auf freier Fläche verschiebt. Alt beim Ziehen schaltet das Raster-Einrasten aus.</td></tr>
     </table>
     <div class="foot"><button class="btn primary" id="helpClose">Schließen</button></div>
@@ -191,8 +191,6 @@ const DIAGRAM_CSS = `
 .e3 .stim-core{fill:#be1e3c;stroke:#000;stroke-width:1.5}
 .e3 .stim-ring{fill:#fff;stroke:#000;stroke-width:1.5}
 .e3 .note-box{fill:#be1e3c;stroke:#000;stroke-width:1.2}
-.e3 .mark-arrow{fill:#c00000;stroke:#000;stroke-width:1.5;stroke-linejoin:round}
-.e3 .mark-cross{stroke:#be1e3c;stroke-width:9;stroke-linecap:round;fill:none}
 .e3 .hit{fill:transparent;stroke:transparent}
 `;
 const TOOLS = [
@@ -221,12 +219,8 @@ const TOOLS = [
   {group:'Kommentare'},
   {id:'note', label:'Notiz', key:'N', hint:'Auf die Zeichenfläche klicken, um einen Text zu platzieren.',
    icon:'<text x="17" y="19" font-size="17" font-family="Arial" font-weight="700" text-anchor="middle" fill="#1c2430">T</text>'},
-  {id:'arrow', label:'Pfeil-Markierung', key:'', hint:'Auf die Zeichenfläche klicken, um einen roten Hinweispfeil zu platzieren. Drehung rechts einstellen.',
-   icon:'<path d="M5 9.500h13V5l11 8-11 8v-4.500H5z" fill="#c00000" stroke="#000" stroke-width="1.1"/>'},
-  {id:'cross', label:'Kreuz-Markierung', key:'', hint:'Auf die Zeichenfläche klicken, um ein rotes Kreuz zu platzieren (z. B. „Kein Bundling“).',
-   icon:'<path d="M10 6l14 14M24 6L10 20" stroke="#be1e3c" stroke-width="4.5" stroke-linecap="round"/>'},
 ];
-const PLACE = new Set(['actor','segment','activity','iface','start','stop','note','arrow','cross']);
+const PLACE = new Set(['actor','segment','activity','iface','start','stop','note']);
 const TYPE_NAME = {actor:'Akteur', segment:'Marktsegment', activity:'Wertaktivität'};
 
 /* ===================== Zustand ===================== */
@@ -478,13 +472,6 @@ function renderCanvas(){
       const bb = t.getBBox();
       if (box) g.insertBefore(el('rect', {class:'note-box', x:bb.x - 14, y:bb.y - 10, width:bb.width + 28, height:bb.height + 20, rx:14, ry:14}), t);
       else g.insertBefore(el('rect', {class:'hit', x:bb.x - 4, y:bb.y - 4, width:bb.width + 8, height:bb.height + 8}), t);
-    } else if (a.type === 'arrow'){
-      const k = (a.size || 60) / 60;
-      el('path', {class:'mark-arrow', d:`M${-30*k} ${-9*k}H${4*k}V${-20*k}L${30*k} 0L${4*k} ${20*k}V${9*k}H${-30*k}Z`}, g);
-    } else {
-      const h = (a.size || 36) / 2;
-      el('path', {class:'hit', d:`M${-h} ${-h}H${h}V${h}H${-h}Z`}, g);
-      el('path', {class:'mark-cross', d:`M${-h} ${-h}L${h} ${h}M${h} ${-h}L${-h} ${h}`}, g);
     }
   }
   renderOverlay();
@@ -567,6 +554,9 @@ function renderProps(){
     if ($('pStack')){ $('pStack').value = n.stack || 'left'; $('pStack').onchange = e => mutate(() => { n.stack = e.target.value; }); }
   } else if (sel.kind === 'iface'){
     const itf = I(sel.id); if (!itf){ box.innerHTML = ''; return; }
+    // so viele Ports, wie auf die Kante des Besitzers passen (höchstens 12)
+    const own = N(itf.owner), sideLen = (itf.side === 'left' || itf.side === 'right') ? own.h : own.w;
+    const maxPorts = Math.max(itf.ports.length, clamp(Math.floor((sideLen - 4 - IF_PAD * 2) / PITCH), 2, 12));
     const rows = itf.ports.map((p, i) => {
       const ex = model.exchanges.filter(e => e.from === p.id || e.to === p.id), lab = (ex.find(e => e.label) || {}).label || '';
       return `<div class="portrow"><span class="idx">${i + 1}</span>
@@ -579,11 +569,27 @@ function renderProps(){
     }).join('');
     box.innerHTML = `
       <p class="muted">Wertschnittstelle von ${esc(nodeLabel(N(itf.owner)))}.</p>
+      <div class="field"><label>Anzahl Wertports: <b id="pCountVal">${itf.ports.length}</b></label>
+        <input type="range" id="pCount" min="1" max="${maxPorts}" step="1" value="${itf.ports.length}" style="width:100%"></div>
       <div class="field"><label>Wertports (Reihenfolge wie dargestellt)</label>${rows}</div>
-      <div class="row"><button class="btn" id="pAddOut">+ ausgehend</button><button class="btn" id="pAddIn">+ eingehend</button></div>
+      <div class="row"><button class="btn" id="pAddOut" ${itf.ports.length < maxPorts ? '' : 'disabled'}>+ ausgehend</button><button class="btn" id="pAddIn" ${itf.ports.length < maxPorts ? '' : 'disabled'}>+ eingehend</button></div>
       <p class="muted" style="margin-top:10px">Mehrere Wertobjekte in einer Schnittstelle bilden eine Bündelung: Sie werden nur gemeinsam ausgetauscht.</p>
       ${delBtn}`;
     const addPort = dir => mutate(() => { itf.ports.push({id:uid('p'), dir}); });
+    $('pCount').oninput = ev => { $('pCountVal').textContent = ev.target.value; };
+    $('pCount').onchange = ev => {
+      const n = clamp(+ev.target.value || 1, 1, maxPorts), cut = itf.ports.slice(n).map(p => p.id);
+      if (cut.some(pid => model.exchanges.some(e => e.from === pid || e.to === pid))
+          && !confirm('Die entfernten Wertports sind verbunden. Die zugehörigen Wertaustausche werden mitgelöscht. Fortfahren?')){
+        ev.target.value = itf.ports.length; $('pCountVal').textContent = itf.ports.length; return;
+      }
+      mutate(() => {
+        model.exchanges = model.exchanges.filter(e => !cut.includes(e.from) && !cut.includes(e.to));
+        itf.ports.length = Math.min(itf.ports.length, n);
+        // neue Ports abwechselnd gegenläufig anfügen, damit die Schnittstelle reziprok bleibt
+        while (itf.ports.length < n) itf.ports.push({id:uid('p'), dir: itf.ports[itf.ports.length - 1].dir === 'out' ? 'in' : 'out'});
+      });
+    };
     $('pAddOut').onclick = () => addPort('out'); $('pAddIn').onclick = () => addPort('in');
     box.querySelectorAll('.pDir').forEach(s => s.onchange = () => mutate(() => { itf.ports[+s.dataset.i].dir = s.value; }));
     box.querySelectorAll('.pUp').forEach(b => b.onclick = () => mutate(() => { const i = +b.dataset.i; [itf.ports[i - 1], itf.ports[i]] = [itf.ports[i], itf.ports[i - 1]]; }));
@@ -621,11 +627,6 @@ function renderProps(){
       bindText($('pText'), v => { a.text = v; });
       $('pNStyle').value = a.style || 'plain'; $('pNStyle').onchange = ev => mutate(() => { a.style = ev.target.value; });
       $('pSize').onchange = ev => mutate(() => { a.size = clamp(+ev.target.value || 15, 9, 48); });
-    } else {
-      box.innerHTML = `${a.type === 'arrow' ? `<div class="field"><label>Drehung (Grad)</label><input type="number" id="pRot" step="15" value="${a.rot || 0}"></div>` : ''}
-        <div class="field"><label>Größe</label><input type="number" id="pSize" min="16" max="200" step="4" value="${a.size || (a.type === 'arrow' ? 60 : 36)}"></div>${delBtn}`;
-      if ($('pRot')) $('pRot').onchange = ev => mutate(() => { a.rot = (+ev.target.value || 0) % 360; });
-      $('pSize').onchange = ev => mutate(() => { a.size = clamp(+ev.target.value || 36, 16, 200); });
     }
   }
   if ($('pDel')) $('pDel').onclick = deleteSelection;
@@ -807,8 +808,6 @@ function place(kind, p, ev){
     mutate(() => {
       created = {id:uid('a'), type:kind, x:Math.round(p.x), y:Math.round(p.y), rot:0};
       if (kind === 'note'){ created.text = 'Notiz'; created.style = 'bold'; created.size = 15; }
-      if (kind === 'arrow'){ created.size = 60; created.rot = -45; }
-      if (kind === 'cross') created.size = 36;
       model.anns.push(created); sel = {kind:'ann', id:created.id};
     });
     setTool('select');
@@ -1054,6 +1053,7 @@ function normalize(m){
   const nid = new Set(b.nodes.map(n => n.id));
   b.ifaces = b.ifaces.filter(i => nid.has(i.owner) && Array.isArray(i.ports) && i.ports.length);
   b.stimuli = b.stimuli.filter(s => nid.has(s.parent));
+  b.anns = b.anns.filter(a => a.type === 'note'); // Pfeil-/Kreuz-Markierungen aus älteren Dateien gibt es nicht mehr
   const pids = new Set(b.ifaces.flatMap(i => i.ports.map(p => p.id))), iids = new Set(b.ifaces.map(i => i.id)), sids = new Set(b.stimuli.map(s => s.id));
   b.exchanges = b.exchanges.filter(e => pids.has(e.from) && pids.has(e.to));
   const okEnd = ep => ep && (ep.kind === 'stim' ? sids.has(ep.id) : iids.has(ep.id));
