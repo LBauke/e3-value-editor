@@ -80,7 +80,14 @@
   .dlg table{border-collapse:collapse;width:100%}
   .dlg td{border-top:1px solid var(--line);padding:7px 8px;vertical-align:top;line-height:1.4}
   .dlg td:first-child{font-weight:600;white-space:nowrap}
-  .dlg .foot{display:flex;justify-content:flex-end;margin-top:14px}
+  .dlg .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+  .dlg h4{margin:16px 0 6px;font-size:14px}
+  .dlg textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;resize:vertical;background:#fff}
+  .dlg textarea.code{font-family:Consolas,Menlo,monospace;font-size:12px}
+  .dlg details{margin-top:8px}
+  .dlg summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+  #aiMsg{margin-top:10px;font-size:13px;line-height:1.45;white-space:pre-line}
+  #aiMsg.err{color:#b42318}
   @media (max-width:1000px){
     #main{grid-template-columns:58px 1fr 240px}
     #palette{padding:6px}
@@ -117,6 +124,7 @@
   <button class="btn" id="bFit" title="Modell einpassen">Einpassen</button>
   <button class="btn on" id="bGrid" title="Raster ein/aus">Raster</button>
   <div class="sep"></div>
+  <button class="btn" id="bAi" title="Aus einer Aufgabenstellung mit Hilfe einer KI einen Modellentwurf erzeugen">KI-Assistent</button>
   <button class="btn" id="bHelp">Hilfe</button>
   <input id="fileIn" type="file" accept=".json,application/json" hidden>
 </header>
@@ -165,9 +173,26 @@
       <tr><td>Stimulus</td><td>Start (roter Punkt) löst ein Wertszenario aus, Stopp (Punkt mit Ring) beendet es.</td></tr>
       <tr><td>Verbindungselement</td><td>Gepunktete Linie innerhalb eines Akteurs: von Stimulus zu Schnittstelle oder von Schnittstelle zu Schnittstelle ziehen.</td></tr>
       <tr><td>Notiz</td><td>Freier Text zum Kommentieren (z. B. „Supply-Side Bundling“).</td></tr>
+      <tr><td>KI-Assistent</td><td>Erzeugt aus einer Aufgabenstellung einen Prompt für einen KI-Chat und baut aus dessen Antwort einen Modellentwurf, der automatisch angeordnet und geprüft wird.</td></tr>
       <tr><td>Ansicht</td><td>Mausrad zoomt, Ziehen auf freier Fläche verschiebt. Alt beim Ziehen schaltet das Raster-Einrasten aus.</td></tr>
     </table>
     <div class="foot"><button class="btn primary" id="helpClose">Schließen</button></div>
+  </div>
+</dialog>
+
+<dialog id="ai">
+  <div class="dlg">
+    <h2>KI-Assistent: Modell aus einer Aufgabe erzeugen</h2>
+    <p class="muted">Der Editor selbst enthält keine KI. Er erzeugt einen fertigen Prompt mit den e³value-Regeln, den du in einen KI-Chat deiner Wahl (z. B. Claude, ChatGPT, Gemini) einfügst. Die Antwort fügst du hier wieder ein; der Editor baut daraus das Modell und prüft es. Das Ergebnis ist ein Entwurf – bitte kontrollieren.</p>
+    <h4>1. Aufgabenstellung einfügen</h4>
+    <textarea id="aiTask" rows="6" placeholder="Aufgabentext hier einfügen …"></textarea>
+    <h4>2. Prompt kopieren und in einen KI-Chat einfügen</h4>
+    <button class="btn primary" id="aiCopy">Prompt kopieren</button>
+    <details id="aiPromptBox"><summary>Prompt anzeigen</summary><textarea id="aiPrompt" class="code" rows="8" readonly></textarea></details>
+    <h4>3. Antwort der KI hier einfügen</h4>
+    <textarea id="aiAnswer" class="code" rows="6" placeholder="Antwort der KI (JSON) hier einfügen …" spellcheck="false"></textarea>
+    <div id="aiMsg"></div>
+    <div class="foot"><button class="btn" id="aiClose">Schließen</button><button class="btn primary" id="aiApply">Modell erzeugen</button></div>
   </div>
 </dialog>
 
@@ -1100,6 +1125,240 @@ function exportPng(){
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s.str);
 }
 function autosave(){ try { localStorage.setItem('e3v-autosave', JSON.stringify({format:'e3value-editor', version:1, title:$('title').value, model})); } catch (e){} }
+
+/* ===================== KI-Assistent ===================== */
+function aiPrompt(task){
+  return `Du bist Experte für die Geschäftsmodellierung mit e3value (Gordijn/Akkermans). Erstelle aus der Aufgabenstellung unten ein e3value-Modell und gib es ausschließlich als JSON im vorgegebenen Format zurück.
+
+REGELN DER NOTATION
+- Akteur: ökonomisch unabhängige Einheit (Unternehmen, Person). Marktsegment: viele gleichartige Akteure, die gleich behandelt werden (z. B. "Kunden", "Gäste").
+- Wertaktivität: Aufgabe, die ein Akteur ausführt und die für ihn wirtschaftlich sinnvoll ist. Sie liegt immer in genau einem Akteur. Nur angeben, wenn die Aufgabe Aktivitäten nennt oder nahelegt.
+- Wertobjekt: was ausgetauscht wird und für mindestens eine Seite einen Wert hat (Ware, Dienstleistung, Geld, Daten, Aufmerksamkeit ...). Kurz benennen, z. B. "Brot", "Geld", "Provision".
+- Transaktion = ein Paar zusammengehöriger Wertschnittstellen zweier Elemente. Reziprozität: Jede Transaktion enthält mindestens ein Wertobjekt in jede Richtung (Leistung und Gegenleistung).
+- Bündelung: Mehrere Wertobjekte gehören nur dann in dieselbe Transaktion, wenn sie ausschließlich gemeinsam ausgetauscht werden. Sonst getrennte Transaktionen.
+- Hat ein Akteur Wertaktivitäten, dann ist das Ende der Transaktion die Aktivität (nicht der Akteur). Keine Transaktion zwischen einem Akteur und seiner eigenen Aktivität. Aktivitäten desselben Akteurs dürfen untereinander tauschen.
+- Wertszenario: Es beginnt mit einem Start-Stimulus (Bedürfnis, meist beim Kunden) und endet mit Stopp-Stimuli. Innerhalb eines Elements verbinden Verbindungselemente den Stimulus mit einer Transaktion oder zwei Transaktionen miteinander; zwischen den Elementen läuft der Pfad über die Transaktionen. Vom Start muss mindestens ein Stopp erreichbar sein, und jede Transaktion soll im Pfad liegen.
+
+VORGEHEN
+1. Prüfe die Aufgabe: Welche Akteure/Marktsegmente, Aktivitäten, Wertobjekte und Abhängigkeiten werden genannt? Erfinde nichts dazu, was die Aufgabe nicht hergibt.
+2. Prüfe dein Modell gegen die Regeln oben (Reziprozität, Bündelung, durchgehender Szenariopfad).
+3. Gib nur das JSON in einem Codeblock aus, ohne weiteren Text.
+
+FORMAT
+{
+  "titel": "kurzer Modelltitel",
+  "akteure": [
+    {"id": "kurze_id", "name": "Anzeigename", "typ": "akteur" oder "marktsegment",
+     "aktivitaeten": [{"id": "kurze_id", "name": "Anzeigename"}]}
+  ],
+  "transaktionen": [
+    {"id": "t1", "a": "id eines Akteurs oder einer Aktivität", "b": "id eines Akteurs oder einer Aktivität",
+     "objekte": [{"name": "Wertobjekt", "von": "a" oder "b"}]}
+  ],
+  "szenario": [
+    {"in": "id des Elements, in dem die Verbindung liegt", "von": "start" oder Transaktions-id, "nach": Transaktions-id oder "stopp"}
+  ]
+}
+Alle ids sind eindeutig. "von": "a" bedeutet, das Wertobjekt fließt von a nach b. "in" ist die Aktivität bzw. der Akteur, an dem die genannten Transaktionen enden. Ordne die Akteure in der Liste so, wie sie von links nach rechts stehen sollen.
+
+BEISPIEL
+Aufgabe: "Eine Bäckerei backt Brot und verkauft es an Kunden. Das Mehl kauft sie bei einer Mühle."
+{
+  "titel": "Bäckerei",
+  "akteure": [
+    {"id": "kunden", "name": "Kunden", "typ": "marktsegment", "aktivitaeten": []},
+    {"id": "baeckerei", "name": "Bäckerei", "typ": "akteur", "aktivitaeten": [{"id": "backen", "name": "Brot backen"}]},
+    {"id": "muehle", "name": "Mühle", "typ": "akteur", "aktivitaeten": []}
+  ],
+  "transaktionen": [
+    {"id": "t1", "a": "kunden", "b": "backen", "objekte": [{"name": "Geld", "von": "a"}, {"name": "Brot", "von": "b"}]},
+    {"id": "t2", "a": "backen", "b": "muehle", "objekte": [{"name": "Geld", "von": "a"}, {"name": "Mehl", "von": "b"}]}
+  ],
+  "szenario": [
+    {"in": "kunden", "von": "start", "nach": "t1"},
+    {"in": "backen", "von": "t1", "nach": "t2"},
+    {"in": "muehle", "von": "t2", "nach": "stopp"}
+  ]
+}
+
+AUFGABENSTELLUNG
+${task.trim()}`;
+}
+function aiExtract(text){
+  const f = text.match(/\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`/i), s = f ? f[1] : text;
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new Error('In der Antwort wurde kein JSON-Objekt gefunden.');
+  try { return JSON.parse(s.slice(a, b + 1)); }
+  catch (e){ throw new Error('Das JSON ist fehlerhaft (' + e.message + ').'); }
+}
+/* Baut aus der vereinfachten KI-Beschreibung ein vollständiges, angeordnetes Modell */
+function aiBuild(spec){
+  const warn = [], str = v => (v == null ? '' : String(v)).trim(), arr = v => Array.isArray(v) ? v : [];
+  let seq = 1; const id = p => p + (seq++);
+  const m = emptyModel(), els = new Map(), roots = [], acts = new Map(), rootOfN = new Map();
+  for (const a of arr(spec.akteure)){
+    const key = str(a.id) || str(a.name);
+    if (!key || els.has(key)){ warn.push(`Akteur „${key || '?'}“ ohne eindeutige id ausgelassen.`); continue; }
+    const n = {id:id('n'), type: /segment/i.test(str(a.typ)) ? 'segment' : 'actor', name: str(a.name) || key, x:0, y:0, w:0, h:0, parent:null};
+    els.set(key, n); roots.push(n); acts.set(n, []); rootOfN.set(n, n);
+    for (const w of arr(a.aktivitaeten)){
+      const k = str(w.id) || str(w.name);
+      if (!k || els.has(k)){ warn.push(`Wertaktivität „${k || '?'}“ ohne eindeutige id ausgelassen.`); continue; }
+      const c = {id:id('n'), type:'activity', name: str(w.name) || k, x:0, y:0, w:0, h:0, parent:n.id};
+      els.set(k, c); acts.get(n).push(c); rootOfN.set(c, n);
+    }
+  }
+  if (!roots.length) throw new Error('Die Antwort enthält keine Akteure (Feld „akteure“).');
+  // Akteure in einem Raster anordnen
+  const cols = roots.length <= 3 ? roots.length : Math.ceil(Math.sqrt(roots.length)), cell = new Map();
+  roots.forEach((r, i) => cell.set(r, {c: i % cols, r: Math.floor(i / cols)}));
+
+  // Transaktionen -> Wertschnittstellen, Wertports, Wertaustausche
+  const opp = {left:'right', right:'left', top:'bottom', bottom:'top'}, flip = d => d === 'out' ? 'in' : 'out';
+  const ifs = [], tIface = new Map();
+  const mkIface = (node, side, dirs, partner) => {
+    const itf = {id:id('i'), owner:node.id, side, off:0, ports:dirs.map(dir => ({id:id('p'), dir}))};
+    const f = {itf, node, side, partner, L: dirs.length * PITCH + IF_PAD * 2, align:null};
+    m.ifaces.push(itf); ifs.push(f); return f;
+  };
+  arr(spec.transaktionen).forEach((t, ti) => {
+    const tid = str(t.id) || 't' + (ti + 1), ea = els.get(str(t.a)), eb = els.get(str(t.b));
+    if (!ea || !eb) return warn.push(`Transaktion ${tid}: Element „${!ea ? str(t.a) : str(t.b)}“ ist nicht bekannt – ausgelassen.`);
+    const objs = arr(t.objekte).filter(o => o && str(o.name));
+    if (!objs.length) return warn.push(`Transaktion ${tid} enthält keine Wertobjekte – ausgelassen.`);
+    const ra = rootOfN.get(ea), rb = rootOfN.get(eb);
+    if (ea === eb || (ra === rb && !(ea.parent && eb.parent))) return warn.push(`Transaktion ${tid}: Ein Akteur tauscht nicht mit sich selbst oder seiner eigenen Wertaktivität – ausgelassen.`);
+    const dirsA = objs.map(o => { const v = str(o.von); return (/^b$/i.test(v) || (v === str(t.b) && v !== str(t.a))) ? 'in' : 'out'; });
+    const dirsB = dirsA.map(flip);
+    let sideA;
+    if (ra === rb) sideA = acts.get(ra).indexOf(ea) < acts.get(ra).indexOf(eb) ? 'bottom' : 'top';
+    else {
+      const ca = cell.get(ra), cb = cell.get(rb), dc = cb.c - ca.c, dr = cb.r - ca.r;
+      sideA = (dc && Math.abs(dc) >= Math.abs(dr)) ? (dc > 0 ? 'right' : 'left') : (dr > 0 ? 'bottom' : 'top');
+    }
+    const sideB = opp[sideA], chain = [];
+    let peer = 0;
+    if (ra === rb) chain.push(mkIface(ea, sideA, dirsA, eb), mkIface(eb, sideB, dirsB, ea));
+    else {
+      if (ea.parent){ chain.push(mkIface(ea, sideA, dirsA, rb)); peer = 1; }
+      const fa = mkIface(ra, sideA, dirsA, rb), fb = mkIface(rb, sideB, dirsB, ra);
+      if (ea.parent) fa.align = chain[0];
+      chain.push(fa, fb);
+      if (eb.parent){ const g = mkIface(eb, sideB, dirsB, ra); fb.align = g; chain.push(g); }
+    }
+    const first = chain[0].itf, last = chain[chain.length - 1].itf;
+    for (const [node, itf] of [[ea, first], [eb, last], [ra, first], [rb, last]]){ const k = node.id + '|' + tid; if (!tIface.has(k)) tIface.set(k, itf); }
+    const vertical = sideA === 'top' || sideA === 'bottom', n = objs.length;
+    objs.forEach((o, j) => {
+      for (let k = 0; k < chain.length - 1; k++){
+        const pa = chain[k].itf.ports[j].id, pb = chain[k + 1].itf.ports[j].id, fwd = dirsA[j] === 'out';
+        const ex = {id:id('e'), from: fwd ? pa : pb, to: fwd ? pb : pa, label: k === peer ? str(o.name) : ''};
+        if (k === peer){
+          if (vertical) ex.ly = Math.round(-7 + (j - (n - 1) / 2) * 20);
+          else if (n === 2 && j === 1) ex.ly = 17;
+        }
+        m.exchanges.push(ex);
+      }
+    });
+  });
+
+  // Größen: jede Kante muss ihre Wertschnittstellen aufnehmen können
+  const up10 = v => Math.ceil(v / 10) * 10;
+  const need = (node, sides) => Math.max(0, ...sides.map(s => { const l = ifs.filter(f => f.node === node && f.side === s); return l.length ? l.reduce((a, f) => a + f.L + 16, 16) : 0; }));
+  for (const r of roots){
+    const as = acts.get(r);
+    for (const a of as){ a.w = up10(Math.max(200, need(a, ['top', 'bottom']))); a.h = up10(Math.max(120, need(a, ['left', 'right']))); }
+    if (as.length){
+      r.w = up10(Math.max(Math.max(...as.map(a => a.w)) + 120, need(r, ['top', 'bottom'])));
+      r.h = up10(Math.max(as.reduce((s, a) => s + a.h + 50, 50), need(r, ['left', 'right'])));
+    } else { r.w = up10(Math.max(190, need(r, ['top', 'bottom']))); r.h = up10(Math.max(150, need(r, ['left', 'right']))); }
+  }
+  const cw = Math.max(...roots.map(r => r.w)) + 200, ch = Math.max(...roots.map(r => r.h)) + 170;
+  for (const r of roots){
+    const c = cell.get(r), as = acts.get(r);
+    r.x = up10(c.c * cw + (cw - r.w) / 2); r.y = up10(c.r * ch + (ch - r.h) / 2);
+    const gap = (r.h - as.reduce((s, a) => s + a.h, 0)) / (as.length + 1);
+    let y = r.y + gap;
+    for (const a of as){ a.x = Math.round(r.x + (r.w - a.w) / 2); a.y = Math.round(y); y += a.h + gap; }
+  }
+  // Schnittstellen entlang der Kanten verteilen (nach Lage des Partners sortiert, ohne Überlappung)
+  const ctr = n => ({x: n.x + n.w / 2, y: n.y + n.h / 2});
+  const placeSide = (node, side) => {
+    const list = ifs.filter(f => f.node === node && f.side === side); if (!list.length) return;
+    const vert = side === 'left' || side === 'right', len = vert ? node.h : node.w, ax = vert ? 'y' : 'x';
+    list.sort((p, q) => ctr(p.partner)[ax] - ctr(q.partner)[ax]);
+    list.forEach((f, i) => {
+      f.want = len * (i + 1) / (list.length + 1);
+      if (f.align && vert) f.want = f.align.node.y + f.align.itf.off - node.y;   // Weiterführung zur Aktivität waagerecht halten
+    });
+    list.sort((p, q) => p.want - q.want);
+    let prev = 0; for (const f of list){ f.c = Math.max(f.want, prev + 10 + f.L / 2); prev = f.c + f.L / 2; }
+    let lim = len; for (const f of [...list].reverse()){ f.c = Math.min(f.c, lim - 10 - f.L / 2); lim = f.c - f.L / 2; }
+    for (const f of list) f.itf.off = Math.round(f.c);
+  };
+  const allActs = roots.flatMap(r => acts.get(r));
+  for (const n of [...allActs, ...roots]) for (const s of ['left', 'right', 'top', 'bottom']) placeSide(n, s);
+  for (const n of [...roots, ...allActs]){
+    const has = s => ifs.some(f => f.node === n && f.side === s);
+    if (has('top') && !has('bottom')) n.namePos = 'bottom';
+    m.nodes.push(n);
+  }
+
+  // Wertszenario: Stimuli und Verbindungselemente
+  const stims = new Map();
+  const stim = (node, kind) => { const k = node.id + '|' + kind; if (!stims.has(k)){ const s = {id:id('s'), kind, parent:node.id, x:0, y:0}; m.stimuli.push(s); stims.set(k, s); } return stims.get(k); };
+  const same = (a, b) => a.kind === b.kind && a.id === b.id;
+  arr(spec.szenario).forEach((c, ci) => {
+    const node = els.get(str(c && c.in));
+    if (!node) return warn.push(`Szenario-Schritt ${ci + 1}: Element „${str(c && c.in)}“ ist nicht bekannt – ausgelassen.`);
+    const end = v => {
+      v = str(v);
+      if (/^start/i.test(v)) return {kind:'stim', id:stim(node, 'start').id};
+      if (/^(stopp?|ende?)$/i.test(v)) return {kind:'stim', id:stim(node, 'stop').id};
+      const itf = tIface.get(node.id + '|' + v); return itf ? {kind:'iface', id:itf.id} : null;
+    };
+    const a = end(c.von), b = end(c.nach);
+    if (!a || !b) return warn.push(`Szenario-Schritt ${ci + 1}: Transaktion „${!a ? str(c.von) : str(c.nach)}“ endet nicht an „${str(c.in)}“ – ausgelassen.`);
+    if (same(a, b) || (a.kind === 'stim' && b.kind === 'stim')) return warn.push(`Szenario-Schritt ${ci + 1}: Ein Verbindungselement braucht mindestens eine Transaktion als Ende – ausgelassen.`);
+    if (m.conns.some(x => (same(x.a, a) && same(x.b, b)) || (same(x.a, b) && same(x.b, a)))) return;
+    m.conns.push({id:id('c'), a, b, style:'straight'});
+  });
+  for (const n of m.nodes){
+    const list = m.stimuli.filter(s => s.parent === n.id), inner = n.type !== 'activity' && acts.get(n).length;
+    list.forEach((s, i) => {
+      if (inner){ s.x = n.x + 28 + i * 46; s.y = n.y + 28; }
+      else { s.x = Math.round(n.x + n.w * (i + 1) / (list.length + 1)); s.y = Math.round(n.y + n.h / 2); }
+    });
+  }
+  return {model:m, title:str(spec.titel), warn};
+}
+function aiMsg(text, err){ const e = $('aiMsg'); e.textContent = text; e.className = err ? 'err' : ''; }
+$('bAi').onclick = () => { aiMsg(''); $('ai').showModal(); };
+$('aiClose').onclick = () => $('ai').close();
+$('aiCopy').onclick = async () => {
+  const task = $('aiTask').value.trim();
+  if (!task) return aiMsg('Bitte zuerst die Aufgabenstellung in Schritt 1 einfügen.', true);
+  const p = aiPrompt(task); $('aiPrompt').value = p;
+  try { await navigator.clipboard.writeText(p); aiMsg('Prompt kopiert. Jetzt in einen KI-Chat einfügen und die Antwort in Schritt 3 einfügen.'); }
+  catch (e){ $('aiPromptBox').open = true; $('aiPrompt').focus(); $('aiPrompt').select(); aiMsg('Automatisches Kopieren ist hier nicht erlaubt. Der Prompt ist markiert – bitte mit Strg+C kopieren.', true); }
+};
+$('aiApply').onclick = () => {
+  let built;
+  try {
+    if (!$('aiAnswer').value.trim()) throw new Error('Bitte die Antwort der KI in Schritt 3 einfügen.');
+    const obj = aiExtract($('aiAnswer').value);
+    built = (obj.format === 'e3value-editor' && obj.model) ? {model:obj.model, title:obj.title, warn:[]} : aiBuild(obj);
+  } catch (err){ return aiMsg('Die Antwort konnte nicht übernommen werden: ' + err.message, true); }
+  if ((model.nodes.length || model.anns.length) && !confirm('Das aktuelle Modell wird durch den KI-Entwurf ersetzt. Mit „Rückgängig“ lässt es sich wiederherstellen. Fortfahren?')) return;
+  sel = null;
+  mutate(() => { model = normalize(built.model); });
+  if (built.title){ $('title').value = built.title; autosave(); }
+  fit();
+  const res = runChecks(), cnt = s => res.filter(r => r.sev === s).length;
+  const sum = `Modell erzeugt: ${model.nodes.length} Elemente, ${model.exchanges.length} Wertaustausche. Modellprüfung: ${cnt('error')} Fehler, ${cnt('warn')} Warnungen.`;
+  if (built.warn.length) aiMsg(sum + '\nNicht übernommen wurde:\n– ' + built.warn.join('\n– '), true);
+  else { $('ai').close(); toast(sum + ' Bitte den Entwurf kontrollieren.', true); }
+};
 
 /* ===================== Start ===================== */
 $('bNew').onclick = () => {
