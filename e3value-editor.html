@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>e³value Editor</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --line:#dfe3e8; --text:#1c2430; --muted:#667085;
+    --accent:#2563eb; --accent-soft:#e8effd; --red:#be1e3c; --ok:#15803d; --warn:#b45309;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;font-size:14px;color:var(--text);background:var(--bg);
+       display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+  button,input,select,textarea{font:inherit;color:inherit}
+  #topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #brand{font-weight:700;font-size:16px;margin-right:6px;white-space:nowrap}
+  #brand sup{color:var(--red)}
+  #title{border:1px solid transparent;border-radius:6px;padding:5px 8px;width:200px;background:transparent}
+  #title:hover,#title:focus{border-color:var(--line);background:#fff;outline:none}
+  .sep{width:1px;align-self:stretch;background:var(--line);margin:2px 4px}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#f1f4f8}
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  #zoomLabel{min-width:48px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+  #main{display:grid;grid-template-columns:226px 1fr 310px;min-height:0}
+  #palette{background:var(--panel);border-right:1px solid var(--line);padding:10px;overflow-y:auto;overflow-x:hidden}
+  .tool span{min-width:0;line-height:1.2;font-size:13.5px}
+  #palette h3,#side h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 4px 6px;font-weight:600}
+  #palette h3:first-child,#side h3:first-child{margin-top:2px}
+  .tool{display:flex;align-items:center;gap:9px;width:100%;border:1px solid transparent;background:transparent;border-radius:7px;
+        padding:6px 7px;cursor:pointer;text-align:left}
+  .tool:hover{background:#f1f4f8}
+  .tool.active{background:var(--accent-soft);border-color:var(--accent)}
+  .tool svg{flex:none;width:34px;height:26px}
+  .tool kbd{margin-left:auto;font:11px ui-monospace,Consolas,monospace;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+  #canvasWrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:#fff}
+  #svg{width:100%;height:100%;display:block;user-select:none;-webkit-user-select:none;touch-action:none;cursor:default}
+  #svg.placing{cursor:crosshair}
+  #svg.panning{cursor:grabbing}
+  #hint{position:absolute;left:12px;bottom:10px;background:rgba(28,36,48,.86);color:#fff;border-radius:6px;padding:5px 10px;font-size:12.5px;
+        pointer-events:none;max-width:calc(100% - 24px)}
+  #toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--red);color:#fff;border-radius:8px;padding:9px 14px;
+         max-width:560px;box-shadow:0 6px 20px rgba(0,0,0,.18);display:none;line-height:1.35}
+  #toast.info{background:#1c2430}
+  #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;color:var(--muted);text-align:center;line-height:1.6}
+  #inlineEdit{position:absolute;display:none;border:2px solid var(--accent);border-radius:4px;padding:2px 5px;font-family:Arial,Helvetica,sans-serif;
+              background:#fff;resize:none;overflow:hidden;outline:none;line-height:1.2;min-width:120px}
+  #side{background:var(--panel);border-left:1px solid var(--line);padding:12px;overflow:auto}
+  .field{margin:0 0 10px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+  .field input[type=text],.field input[type=number],.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:#fff}
+  .field textarea{min-height:70px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .muted{color:var(--muted);font-size:12.5px;line-height:1.45}
+  .portrow{display:flex;gap:4px;align-items:center;margin-bottom:5px}
+  .portrow .idx{width:18px;color:var(--muted);font-size:12px;text-align:right}
+  .portrow select{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#fff}
+  .portrow .obj{font-size:12px;color:var(--muted);max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mini{border:1px solid var(--line);background:#fff;border-radius:5px;width:26px;height:26px;cursor:pointer;padding:0;flex:none}
+  .mini:hover{background:#f1f4f8}
+  .mini:disabled{opacity:.35;cursor:default}
+  .row{display:flex;gap:6px;flex-wrap:wrap}
+  .danger{color:var(--red);border-color:#f0c6ce}
+  #checkSummary{display:flex;align-items:center;gap:8px;margin:0 4px 8px;font-weight:600}
+  .issue{display:flex;gap:8px;padding:7px 8px;border:1px solid var(--line);border-radius:7px;margin-bottom:6px;cursor:pointer;line-height:1.35;font-size:13px;background:#fff;width:100%;text-align:left}
+  .issue:hover{border-color:var(--accent)}
+  .issue .tag{flex:none;font-size:10.5px;font-weight:700;border-radius:4px;padding:1px 5px;height:fit-content;margin-top:1px}
+  .issue.error .tag{background:#fde8ec;color:var(--red)}
+  .issue.warn .tag{background:#fef3e2;color:var(--warn)}
+  .issue.info .tag{background:#eef2f7;color:var(--muted)}
+  hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+  dialog{border:0;border-radius:12px;padding:0;max-width:680px;width:calc(100% - 40px);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  dialog::backdrop{background:rgba(20,26,36,.45)}
+  .dlg{padding:20px 24px}
+  .dlg h2{margin:0 0 10px;font-size:18px}
+  .dlg table{border-collapse:collapse;width:100%}
+  .dlg td{border-top:1px solid var(--line);padding:7px 8px;vertical-align:top;line-height:1.4}
+  .dlg td:first-child{font-weight:600;white-space:nowrap}
+  .dlg .foot{display:flex;justify-content:flex-end;margin-top:14px}
+  @media (max-width:1000px){
+    #main{grid-template-columns:58px 1fr 240px}
+    #palette{padding:6px}
+    .tool span,.tool kbd,#palette h3{display:none}
+    .tool{justify-content:center;padding:6px 2px}
+  }
+  /* Editor-Overlay (wird nicht exportiert) */
+  .sel-outline{fill:none;stroke:var(--accent);stroke-dasharray:5 4;vector-effect:non-scaling-stroke;stroke-width:1.5}
+  .sel-line{fill:none;stroke:var(--accent);stroke-opacity:.45;stroke-linecap:round}
+  .handle{fill:#fff;stroke:var(--accent);vector-effect:non-scaling-stroke;stroke-width:1.5;pointer-events:all}
+  .rubber{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;fill:none}
+  .target{fill:rgba(21,128,61,.18);stroke:var(--ok);stroke-width:2;vector-effect:non-scaling-stroke}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div id="brand">e<sup>3</sup>value Editor</div>
+  <input id="title" type="text" value="Unbenanntes Modell" aria-label="Modelltitel" spellcheck="false">
+  <div class="sep"></div>
+  <button class="btn" id="bNew">Neu</button>
+  <button class="btn" id="bOpen">Öffnen</button>
+  <button class="btn primary" id="bSave" title="Modell als Datei speichern (Strg+S)">Speichern</button>
+  <div class="sep"></div>
+  <button class="btn" id="bPng" title="Als Bild exportieren">PNG</button>
+  <button class="btn" id="bSvg" title="Als Vektorgrafik exportieren">SVG</button>
+  <div class="sep"></div>
+  <button class="btn" id="bUndo" title="Rückgängig (Strg+Z)">↶</button>
+  <button class="btn" id="bRedo" title="Wiederholen (Strg+Y)">↷</button>
+  <button class="btn danger" id="bDel" title="Auswahl löschen (Entf)">Löschen</button>
+  <div class="sep"></div>
+  <button class="btn" id="bZoomOut" title="Verkleinern">−</button>
+  <span id="zoomLabel">100%</span>
+  <button class="btn" id="bZoomIn" title="Vergrößern">+</button>
+  <button class="btn" id="bFit" title="Modell einpassen">Einpassen</button>
+  <button class="btn on" id="bGrid" title="Raster ein/aus">Raster</button>
+  <div class="sep"></div>
+  <button class="btn" id="bHelp">Hilfe</button>
+  <input id="fileIn" type="file" accept=".json,application/json" hidden>
+</header>
+
+<div id="main">
+  <aside id="palette"></aside>
+  <div id="canvasWrap">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M20 0H0V20" fill="none" stroke="#e9edf2" stroke-width="1"/>
+        </pattern>
+        <style id="diagramCss"></style>
+      </defs>
+      <rect id="gridRect" width="100%" height="100%" fill="url(#gridPat)"/>
+      <g id="viewport">
+        <g id="content" class="e3"></g>
+        <g id="overlay" pointer-events="none"></g>
+      </g>
+    </svg>
+    <div id="empty"><div>Links ein Element wählen und auf die Zeichenfläche klicken.<br>Am besten mit einem <b>Akteur</b> oder <b>Marktsegment</b> beginnen.</div></div>
+    <textarea id="inlineEdit" rows="1" spellcheck="false"></textarea>
+    <div id="toast" role="status"></div>
+    <div id="hint"></div>
+  </div>
+  <aside id="side">
+    <h3>Eigenschaften</h3>
+    <div id="props"></div>
+    <hr>
+    <h3>Modellprüfung</h3>
+    <div id="checkSummary"></div>
+    <div id="checks"></div>
+  </aside>
+</div>
+
+<dialog id="help">
+  <div class="dlg">
+    <h2>Notation und Bedienung</h2>
+    <table>
+      <tr><td>Akteur</td><td>Ökonomisch unabhängige Einheit (Rechteck). Name per Doppelklick ändern.</td></tr>
+      <tr><td>Marktsegment</td><td>Mehrere gleich behandelte Akteure (gestapelte Rechtecke).</td></tr>
+      <tr><td>Wertaktivität</td><td>Aufgabe eines Akteurs (abgerundetes Rechteck) – wird in einen Akteur gesetzt.</td></tr>
+      <tr><td>Wertschnittstelle</td><td>Bündelt Wertports und drückt Reziprozität aus. Auf den Rand eines Akteurs oder einer Aktivität klicken; sie rastet dort ein und lässt sich am Rand entlang verschieben.</td></tr>
+      <tr><td>Wertport</td><td>Dreieck in der Schnittstelle; die Richtung zeigt, ob ein Wertobjekt rein- oder rausgeht. Ports rechts unter „Eigenschaften“ hinzufügen, umdrehen, sortieren. Doppelklick dreht einen freien Port um.</td></tr>
+      <tr><td>Wertaustausch</td><td>Werkzeug wählen und von Port zu Port ziehen. Zwischen Akteuren: ausgehend → eingehend, mit Wertobjekt als Beschriftung. Zwischen Akteur und eigener Aktivität: gleiche Richtung (Weiterführung).</td></tr>
+      <tr><td>Stimulus</td><td>Start (roter Punkt) löst ein Wertszenario aus, Stopp (Punkt mit Ring) beendet es.</td></tr>
+      <tr><td>Verbindungselement</td><td>Gepunktete Linie innerhalb eines Akteurs: von Stimulus zu Schnittstelle oder von Schnittstelle zu Schnittstelle ziehen.</td></tr>
+      <tr><td>Notiz / Markierung</td><td>Freier Text, roter Pfeil und rotes Kreuz zum Kommentieren (z. B. „Supply-Side Bundling“).</td></tr>
+      <tr><td>Ansicht</td><td>Mausrad zoomt, Ziehen auf freier Fläche verschiebt. Alt beim Ziehen schaltet das Raster-Einrasten aus.</td></tr>
+    </table>
+    <div class="foot"><button class="btn primary" id="helpClose">Schließen</button></div>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+/* ===================== Konstanten ===================== */
+const NS = 'http://www.w3.org/2000/svg';
+const GRID = 10, PITCH = 24, IF_T = 20, IF_PAD = 6, STIM_R = 13, STOP_R = 18;
+const DIAGRAM_CSS = `
+.e3 text{font-family:Arial,Helvetica,sans-serif;fill:#000}
+.e3 .actor-rect{fill:#f2f2f2;stroke:#000;stroke-width:1.5}
+.e3 .activity-rect{fill:#fff;stroke:#000;stroke-width:1.5}
+.e3 .actor-name{font-size:16px;font-weight:700}
+.e3 .activity-name{font-size:15px}
+.e3 .iface{fill:#f4a3b3;stroke:#000;stroke-width:1.5}
+.e3 .port{fill:#000}
+.e3 .exchange{stroke:#000;stroke-width:1.5;fill:none}
+.e3 .ex-label{font-size:13.5px;text-anchor:middle}
+.e3 .conn{stroke:#000;stroke-width:2.6;stroke-dasharray:2.6 3.4;fill:none}
+.e3 .conn-dot{fill:#000}
+.e3 .stim-core{fill:#be1e3c;stroke:#000;stroke-width:1.5}
+.e3 .stim-ring{fill:#fff;stroke:#000;stroke-width:1.5}
+.e3 .note-box{fill:#be1e3c;stroke:#000;stroke-width:1.2}
+.e3 .mark-arrow{fill:#c00000;stroke:#000;stroke-width:1.5;stroke-linejoin:round}
+.e3 .mark-cross{stroke:#be1e3c;stroke-width:9;stroke-linecap:round;fill:none}
+.e3 .hit{fill:transparent;stroke:transparent}
+`;
+const TOOLS = [
+  {group:'Werkzeug'},
+  {id:'select', label:'Auswählen', key:'V', hint:'Elemente anklicken, ziehen und per Doppelklick umbenennen. Ziehen auf freier Fläche verschiebt die Ansicht.',
+   icon:'<path d="M11 4l11 10-6 1 3.5 6-2.6 1.4L13.5 16 10 20z" fill="#1c2430"/>'},
+  {group:'Akteure'},
+  {id:'actor', label:'Akteur', key:'A', hint:'Auf die Zeichenfläche klicken, um einen Akteur zu platzieren.',
+   icon:'<rect x="5" y="5" width="24" height="16" fill="#f2f2f2" stroke="#000" stroke-width="1.3"/>'},
+  {id:'segment', label:'Marktsegment', key:'M', hint:'Auf die Zeichenfläche klicken, um ein Marktsegment zu platzieren.',
+   icon:'<rect x="3" y="9" width="22" height="14" fill="#f2f2f2" stroke="#000" stroke-width="1.2"/><rect x="6" y="6" width="22" height="14" fill="#f2f2f2" stroke="#000" stroke-width="1.2"/><rect x="9" y="3" width="22" height="14" fill="#f2f2f2" stroke="#000" stroke-width="1.2"/>'},
+  {id:'activity', label:'Wertaktivität', key:'W', hint:'In einen Akteur oder ein Marktsegment klicken, um eine Wertaktivität zu platzieren.',
+   icon:'<rect x="5" y="5" width="24" height="16" rx="5" fill="#fff" stroke="#000" stroke-width="1.3"/>'},
+  {group:'Wertaustausch'},
+  {id:'iface', label:'Wertschnittstelle', key:'S', hint:'Auf den Rand eines Akteurs oder einer Wertaktivität klicken. Die Schnittstelle erhält einen ausgehenden und einen eingehenden Wertport.',
+   icon:'<rect x="12" y="2" width="10" height="22" rx="5" fill="#f4a3b3" stroke="#000" stroke-width="1.3"/><path d="M14.5 5.5l5 3-5 3zM19.5 14.5l-5 3 5 3z" fill="#000"/>'},
+  {id:'exchange', label:'Wertaustausch', key:'X', hint:'Von einem Wertport zu einem anderen Wertport ziehen. Passende Ports werden grün markiert.',
+   icon:'<path d="M4 9h22M30 17H8" stroke="#000" stroke-width="1.5"/><path d="M24 5.5l6 3.5-6 3.5zM10 13.500l-6 3.500 6 3.500z" fill="#000"/>'},
+  {group:'Wertszenario'},
+  {id:'start', label:'Start-Stimulus', key:'1', hint:'In eine Wertaktivität (oder einen Akteur) klicken, um den Auslöser des Wertszenarios zu setzen.',
+   icon:'<circle cx="17" cy="13" r="7" fill="#be1e3c" stroke="#000" stroke-width="1.3"/>'},
+  {id:'stop', label:'Stopp-Stimulus', key:'2', hint:'In eine Wertaktivität (oder einen Akteur) klicken, um das Ende des Wertszenarios zu setzen.',
+   icon:'<circle cx="17" cy="13" r="10" fill="#fff" stroke="#000" stroke-width="1.3"/><circle cx="17" cy="13" r="6.500" fill="#be1e3c" stroke="#000" stroke-width="1.3"/>'},
+  {id:'connect', label:'Verbindungselement', key:'C', hint:'Von einem Stimulus zu einer Wertschnittstelle oder von Schnittstelle zu Schnittstelle ziehen (innerhalb eines Akteurs).',
+   icon:'<path d="M5 13h24" stroke="#000" stroke-width="2.6" stroke-dasharray="2.6 3.4"/><circle cx="29" cy="13" r="3" fill="#000"/>'},
+  {group:'Kommentare'},
+  {id:'note', label:'Notiz', key:'N', hint:'Auf die Zeichenfläche klicken, um einen Text zu platzieren.',
+   icon:'<text x="17" y="19" font-size="17" font-family="Arial" font-weight="700" text-anchor="middle" fill="#1c2430">T</text>'},
+  {id:'arrow', label:'Pfeil-Markierung', key:'', hint:'Auf die Zeichenfläche klicken, um einen roten Hinweispfeil zu platzieren. Drehung rechts einstellen.',
+   icon:'<path d="M5 9.500h13V5l11 8-11 8v-4.500H5z" fill="#c00000" stroke="#000" stroke-width="1.1"/>'},
+  {id:'cross', label:'Kreuz-Markierung', key:'', hint:'Auf die Zeichenfläche klicken, um ein rotes Kreuz zu platzieren (z. B. „Kein Bundling“).',
+   icon:'<path d="M10 6l14 14M24 6L10 20" stroke="#be1e3c" stroke-width="4.5" stroke-linecap="round"/>'},
+];
+const PLACE = new Set(['actor','segment','activity','iface','start','stop','note','arrow','cross']);
+const TYPE_NAME = {actor:'Akteur', segment:'Marktsegment', activity:'Wertaktivität'};
+
+/* ===================== Zustand ===================== */
+const $ = id => document.getElementById(id);
+const svg = $('svg'), content = $('content'), overlay = $('overlay'), wrap = $('canvasWrap');
+$('diagramCss').textContent = DIAGRAM_CSS;
+
+function emptyModel(){ return {seq:1, nodes:[], ifaces:[], exchanges:[], stimuli:[], conns:[], anns:[]}; }
+let model = emptyModel();
+let view = {x:60, y:60, k:1};
+let tool = 'select';
+let sel = null;            // {kind:'node'|'iface'|'exchange'|'conn'|'stim'|'ann', id}
+let drag = null;
+let undoStack = [], redoStack = [];
+let showGrid = true;
+let lastDown = null;
+
+const uid = p => p + (model.seq++);
+const snapG = (v, e) => (e && e.altKey) ? Math.round(v) : Math.round(v / GRID) * GRID;
+const clamp = (v, a, b) => b < a ? (a + b) / 2 : Math.min(b, Math.max(a, v));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const snapshot = () => JSON.stringify(model);
+
+const N = id => model.nodes.find(n => n.id === id);
+const I = id => model.ifaces.find(i => i.id === id);
+const S = id => model.stimuli.find(s => s.id === id);
+const ifaceOfPort = pid => model.ifaces.find(i => i.ports.some(p => p.id === pid));
+const portById = pid => { const i = ifaceOfPort(pid); return i && i.ports.find(p => p.id === pid); };
+const rootOf = nodeId => { const n = N(nodeId); return n ? (n.parent || n.id) : null; };
+const nodeLabel = n => `${TYPE_NAME[n.type]} „${n.name.trim() || 'ohne Namen'}“`;
+const childrenOf = id => model.nodes.filter(n => n.parent === id);
+
+/* ===================== Geometrie ===================== */
+function ifaceGeom(itf){
+  const o = N(itf.owner), n = Math.max(1, itf.ports.length);
+  const L = n * PITCH + IF_PAD * 2, vertical = itf.side === 'left' || itf.side === 'right';
+  const sideLen = vertical ? o.h : o.w;
+  const off = clamp(itf.off, L / 2 + 2, sideLen - L / 2 - 2);
+  let cx, cy;
+  if (itf.side === 'left'){ cx = o.x; cy = o.y + off; }
+  else if (itf.side === 'right'){ cx = o.x + o.w; cy = o.y + off; }
+  else if (itf.side === 'top'){ cx = o.x + off; cy = o.y; }
+  else { cx = o.x + off; cy = o.y + o.h; }
+  const out = {left:[-1,0], right:[1,0], top:[0,-1], bottom:[0,1]}[itf.side];
+  const ports = itf.ports.map((p, i) => {
+    const t = -L / 2 + IF_PAD + PITCH * (i + .5), d = p.dir === 'out' ? 1 : -1;
+    return {id:p.id, dir:p.dir, x: vertical ? cx : cx + t, y: vertical ? cy + t : cy,
+            ang: Math.atan2(out[1] * d, out[0] * d) * 180 / Math.PI};
+  });
+  return {cx, cy, L, vertical, w: vertical ? IF_T : L, h: vertical ? L : IF_T, ports,
+          inner:{x: cx - out[0] * IF_T / 2, y: cy - out[1] * IF_T / 2},
+          outer:{x: cx + out[0] * IF_T / 2, y: cy + out[1] * IF_T / 2}};
+}
+function portPos(pid){ const i = ifaceOfPort(pid); return i ? ifaceGeom(i).ports.find(p => p.id === pid) : null; }
+function endCenter(ep){
+  if (ep.kind === 'stim'){ const s = S(ep.id); return {x:s.x, y:s.y}; }
+  const g = ifaceGeom(I(ep.id)); return {x:g.cx, y:g.cy};
+}
+function endPoint(ep, other){
+  if (ep.kind === 'stim') return endCenter(ep);
+  const g = ifaceGeom(I(ep.id)), d = p => Math.hypot(p.x - other.x, p.y - other.y);
+  return d(g.inner) <= d(g.outer) ? g.inner : g.outer;
+}
+function connPath(c){
+  const a = endPoint(c.a, endCenter(c.b)), b = endPoint(c.b, endCenter(c.a));
+  if (c.style === 'hv') return {a, b, d:`M${a.x} ${a.y}H${b.x}V${b.y}`};
+  if (c.style === 'vh') return {a, b, d:`M${a.x} ${a.y}V${b.y}H${b.x}`};
+  return {a, b, d:`M${a.x} ${a.y}L${b.x} ${b.y}`};
+}
+const inRect = (p, n, m = 0) => p.x >= n.x - m && p.x <= n.x + n.w + m && p.y >= n.y - m && p.y <= n.y + n.h + m;
+function actorAt(p){ return [...model.nodes].reverse().find(n => n.type !== 'activity' && inRect(p, n)); }
+function activityAt(p){ return [...model.nodes].reverse().find(n => n.type === 'activity' && inRect(p, n)); }
+function nearestEdge(p, nodes){
+  let best = null;
+  for (const n of nodes){
+    const cands = [
+      ['left',   Math.hypot(p.x - n.x,         p.y - clamp(p.y, n.y, n.y + n.h)), p.y - n.y],
+      ['right',  Math.hypot(p.x - (n.x + n.w), p.y - clamp(p.y, n.y, n.y + n.h)), p.y - n.y],
+      ['top',    Math.hypot(p.y - n.y,         p.x - clamp(p.x, n.x, n.x + n.w)), p.x - n.x],
+      ['bottom', Math.hypot(p.y - (n.y + n.h), p.x - clamp(p.x, n.x, n.x + n.w)), p.x - n.x],
+    ];
+    for (const [side, d, off] of cands) if (!best || d < best.d) best = {node:n, side, d, off};
+  }
+  return best;
+}
+
+/* ===================== Syntaxregeln ===================== */
+function exInfo(aPid, bPid){
+  const ia = ifaceOfPort(aPid), ib = ifaceOfPort(bPid);
+  if (!ia || !ib) return null;
+  const oa = N(ia.owner), ob = N(ib.owner);
+  return {ia, ib, oa, ob, pa: portById(aPid), pb: portById(bPid), nested: oa.parent === ob.id || ob.parent === oa.id};
+}
+const isNested = e => { const i = exInfo(e.from, e.to); return !!i && i.nested; };
+function checkExchange(aPid, bPid, ignoreId){
+  if (aPid === bPid) return 'Start- und Zielport sind identisch.';
+  const inf = exInfo(aPid, bPid);
+  if (!inf) return 'Wertport nicht gefunden.';
+  const {ia, ib, oa, ob, pa, pb, nested} = inf;
+  if (ia === ib) return 'Ein Wertaustausch verbindet Wertports zweier verschiedener Wertschnittstellen.';
+  if (oa === ob) return 'Beide Wertschnittstellen gehören zum selben Element.';
+  if (nested){
+    if (pa.dir !== pb.dir) return 'Zwischen einem Akteur und seiner Wertaktivität wird ein Port in gleicher Richtung weitergeführt (ausgehend → ausgehend bzw. eingehend → eingehend).';
+  } else {
+    if (pa.dir === pb.dir) return 'Ein Wertaustausch verbindet gegenläufige Wertports: einen ausgehenden mit einem eingehenden.';
+    const bothRoot = !oa.parent && !ob.parent, siblings = oa.parent && oa.parent === ob.parent;
+    if (!bothRoot && !siblings) return 'Wertaktivitäten tauschen nach außen nur über die Wertschnittstelle ihres Akteurs aus. Verbinde die Aktivität zuerst mit einer Schnittstelle ihres Akteurs.';
+  }
+  for (const [pid, owner] of [[aPid, oa], [bPid, ob]]){
+    for (const e of model.exchanges){
+      if (e.id === ignoreId || (e.from !== pid && e.to !== pid)) continue;
+      if ((e.from === aPid && e.to === bPid) || (e.from === bPid && e.to === aPid)) return 'Diese beiden Wertports sind bereits verbunden.';
+      if (owner.type === 'activity' || isNested(e) === nested) return 'Dieser Wertport ist bereits verbunden. Für ein weiteres Wertobjekt der Schnittstelle einen zusätzlichen Wertport hinzufügen.';
+    }
+  }
+  return null;
+}
+const endRoot = ep => ep.kind === 'stim' ? rootOf(S(ep.id).parent) : rootOf(I(ep.id).owner);
+const sameEnd = (a, b) => a.kind === b.kind && a.id === b.id;
+function checkConn(a, b){
+  if (sameEnd(a, b)) return 'Start und Ziel sind identisch.';
+  if (a.kind === 'stim' && b.kind === 'stim') return 'Ein Verbindungselement verbindet einen Stimulus mit einer Wertschnittstelle oder zwei Wertschnittstellen.';
+  if (endRoot(a) !== endRoot(b)) return 'Verbindungselemente verlaufen innerhalb eines Akteurs. Zwischen Akteuren fließen Werte über Wertaustausche.';
+  if (model.conns.some(c => (sameEnd(c.a, a) && sameEnd(c.b, b)) || (sameEnd(c.a, b) && sameEnd(c.b, a)))) return 'Diese Verbindung besteht bereits.';
+  return null;
+}
+
+/* ===================== Änderungen / Undo ===================== */
+function mutate(fn){
+  const before = snapshot();
+  fn();
+  if (snapshot() !== before){ undoStack.push(before); if (undoStack.length > 200) undoStack.shift(); redoStack = []; }
+  render();
+}
+function undo(){ if (!undoStack.length) return; redoStack.push(snapshot()); model = JSON.parse(undoStack.pop()); sel = null; render(); }
+function redo(){ if (!redoStack.length) return; undoStack.push(snapshot()); model = JSON.parse(redoStack.pop()); sel = null; render(); }
+
+function removeIface(id){
+  const itf = I(id); if (!itf) return;
+  const pids = new Set(itf.ports.map(p => p.id));
+  model.exchanges = model.exchanges.filter(e => !pids.has(e.from) && !pids.has(e.to));
+  model.conns = model.conns.filter(c => !(c.a.kind === 'iface' && c.a.id === id) && !(c.b.kind === 'iface' && c.b.id === id));
+  model.ifaces = model.ifaces.filter(i => i.id !== id);
+}
+function removeStim(id){
+  model.conns = model.conns.filter(c => !(c.a.kind === 'stim' && c.a.id === id) && !(c.b.kind === 'stim' && c.b.id === id));
+  model.stimuli = model.stimuli.filter(s => s.id !== id);
+}
+function removeNode(id){
+  childrenOf(id).forEach(c => removeNode(c.id));
+  model.ifaces.filter(i => i.owner === id).forEach(i => removeIface(i.id));
+  model.stimuli.filter(s => s.parent === id).forEach(s => removeStim(s.id));
+  model.nodes = model.nodes.filter(n => n.id !== id);
+}
+function deleteSelection(){
+  if (!sel) return;
+  const {kind, id} = sel;
+  mutate(() => {
+    if (kind === 'node') removeNode(id);
+    else if (kind === 'iface') removeIface(id);
+    else if (kind === 'stim') removeStim(id);
+    else if (kind === 'exchange') model.exchanges = model.exchanges.filter(e => e.id !== id);
+    else if (kind === 'conn') model.conns = model.conns.filter(c => c.id !== id);
+    else if (kind === 'ann') model.anns = model.anns.filter(a => a.id !== id);
+    sel = null;
+  });
+}
+
+/* ===================== Zeichnen ===================== */
+function el(name, attrs, parent, text){
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function multiText(parent, lines, attrs, lh){
+  const t = el('text', attrs, parent);
+  lines.forEach((ln, i) => el('tspan', {x: attrs.x, dy: i ? lh : 0}, t, ln || ' '));
+  return t;
+}
+function exLabelPos(e){
+  const a = portPos(e.from), b = portPos(e.to);
+  return {x: (a.x + b.x) / 2 + (e.lx || 0), y: (a.y + b.y) / 2 + (e.ly == null ? -7 : e.ly)};
+}
+
+function nameY(n){
+  const act = n.type === 'activity';
+  if (n.namePos === 'bottom') return n.y + n.h + (act ? 18 : 20) + (n.type === 'segment' ? 22 : 0);
+  return n.y - (act ? 6 : 7);
+}
+
+function renderCanvas(){
+  content.textContent = '';
+  const actors = model.nodes.filter(n => n.type !== 'activity'), acts = model.nodes.filter(n => n.type === 'activity');
+  for (const n of actors){
+    const g = el('g', {'data-kind':'node', 'data-id':n.id}, content);
+    if (n.type === 'segment'){
+      const sx = n.stack === 'right' ? 1 : -1;
+      for (const k of [2, 1]) el('rect', {class:'actor-rect', x:n.x + sx * 11 * k, y:n.y + 11 * k, width:n.w, height:n.h}, g);
+    }
+    el('rect', {class:'actor-rect', x:n.x, y:n.y, width:n.w, height:n.h}, g);
+    el('text', {class:'actor-name', x:n.x, y:nameY(n)}, g, n.name);
+  }
+  for (const n of acts){
+    const g = el('g', {'data-kind':'node', 'data-id':n.id}, content);
+    el('rect', {class:'activity-rect', x:n.x, y:n.y, width:n.w, height:n.h, rx:Math.min(22, n.h / 3), ry:Math.min(22, n.h / 3)}, g);
+    el('text', {class:'activity-name', x:n.x + 4, y:nameY(n)}, g, n.name);
+  }
+  for (const e of model.exchanges){
+    const a = portPos(e.from), b = portPos(e.to); if (!a || !b) continue;
+    const g = el('g', {'data-kind':'exchange', 'data-id':e.id}, content);
+    el('line', {class:'exchange', x1:a.x, y1:a.y, x2:b.x, y2:b.y}, g);
+    el('line', {class:'hit', x1:a.x, y1:a.y, x2:b.x, y2:b.y, 'stroke-width':12}, g);
+    if (e.label && e.label.trim()){
+      const p = exLabelPos(e), lines = e.label.split('\n'), up = (e.ly == null ? -7 : e.ly) < 0;
+      multiText(g, lines, {class:'ex-label', x:p.x, y:p.y - (up ? (lines.length - 1) * 15 : 0)}, 15);
+    }
+  }
+  for (const itf of model.ifaces){
+    const q = ifaceGeom(itf);
+    const g = el('g', {'data-kind':'iface', 'data-id':itf.id}, content);
+    el('rect', {class:'iface', x:q.cx - q.w / 2, y:q.cy - q.h / 2, width:q.w, height:q.h, rx:IF_T / 2, ry:IF_T / 2}, g);
+    for (const p of q.ports){
+      el('path', {class:'port', d:'M7 0L-5 -6.500L-5 6.500Z', transform:`translate(${p.x} ${p.y}) rotate(${p.ang})`}, g);
+      el('circle', {class:'hit', cx:p.x, cy:p.y, r:10, 'data-kind':'port', 'data-id':p.id}, g);
+    }
+  }
+  for (const c of model.conns){
+    const pth = connPath(c);
+    const g = el('g', {'data-kind':'conn', 'data-id':c.id}, content);
+    el('path', {class:'conn', d:pth.d}, g);
+    el('path', {class:'hit', d:pth.d, 'stroke-width':12, fill:'none'}, g);
+    if (c.a.kind === 'iface') el('circle', {class:'conn-dot', cx:pth.a.x, cy:pth.a.y, r:3.6}, g);
+    if (c.b.kind === 'iface') el('circle', {class:'conn-dot', cx:pth.b.x, cy:pth.b.y, r:3.6}, g);
+  }
+  for (const s of model.stimuli){
+    const g = el('g', {'data-kind':'stim', 'data-id':s.id}, content);
+    if (s.kind === 'stop') el('circle', {class:'stim-ring', cx:s.x, cy:s.y, r:STOP_R}, g);
+    el('circle', {class:'stim-core', cx:s.x, cy:s.y, r:s.kind === 'stop' ? 12 : STIM_R}, g);
+  }
+  for (const a of model.anns){
+    const g = el('g', {'data-kind':'ann', 'data-id':a.id, transform:`translate(${a.x} ${a.y}) rotate(${a.rot || 0})`}, content);
+    if (a.type === 'note'){
+      const fs = a.size || 15, lines = (a.text || '').split('\n'), box = a.style === 'box';
+      const t = multiText(g, lines, {class:'note-text', x:0, y:fs, 'font-size':fs,
+        'font-weight': (a.style === 'bold' || a.style === 'red' || box) ? 700 : 400,
+        style: `fill:${box ? '#fff' : a.style === 'red' ? '#be1e3c' : '#000'}`, 'text-anchor': box ? 'middle' : 'start'}, fs * 1.25);
+      const bb = t.getBBox();
+      if (box) g.insertBefore(el('rect', {class:'note-box', x:bb.x - 14, y:bb.y - 10, width:bb.width + 28, height:bb.height + 20, rx:14, ry:14}), t);
+      else g.insertBefore(el('rect', {class:'hit', x:bb.x - 4, y:bb.y - 4, width:bb.width + 8, height:bb.height + 8}), t);
+    } else if (a.type === 'arrow'){
+      const k = (a.size || 60) / 60;
+      el('path', {class:'mark-arrow', d:`M${-30*k} ${-9*k}H${4*k}V${-20*k}L${30*k} 0L${4*k} ${20*k}V${9*k}H${-30*k}Z`}, g);
+    } else {
+      const h = (a.size || 36) / 2;
+      el('path', {class:'hit', d:`M${-h} ${-h}H${h}V${h}H${-h}Z`}, g);
+      el('path', {class:'mark-cross', d:`M${-h} ${-h}L${h} ${h}M${h} ${-h}L${-h} ${h}`}, g);
+    }
+  }
+  renderOverlay();
+  $('empty').style.display = (model.nodes.length || model.anns.length) ? 'none' : 'flex';
+}
+
+function renderOverlay(){
+  overlay.textContent = '';
+  const hs = 9 / view.k;
+  if (sel){
+    if (sel.kind === 'node'){
+      const n = N(sel.id);
+      if (n){
+        el('rect', {class:'sel-outline', x:n.x - 3, y:n.y - 3, width:n.w + 6, height:n.h + 6}, overlay);
+        for (const [hx, hy, name] of [[0,0,'nw'],[.5,0,'n'],[1,0,'ne'],[1,.5,'e'],[1,1,'se'],[.5,1,'s'],[0,1,'sw'],[0,.5,'w']]){
+          el('rect', {class:'handle', x:n.x + n.w * hx - hs / 2, y:n.y + n.h * hy - hs / 2, width:hs, height:hs,
+            'data-kind':'handle', 'data-id':name, style:`cursor:${name}-resize`}, overlay);
+        }
+      }
+    } else if (sel.kind === 'iface'){
+      const itf = I(sel.id);
+      if (itf){ const q = ifaceGeom(itf); el('rect', {class:'sel-outline', x:q.cx - q.w / 2 - 4, y:q.cy - q.h / 2 - 4, width:q.w + 8, height:q.h + 8, rx:IF_T / 2 + 4}, overlay); }
+    } else if (sel.kind === 'exchange'){
+      const e = model.exchanges.find(x => x.id === sel.id);
+      if (e){ const a = portPos(e.from), b = portPos(e.to); el('line', {class:'sel-line', x1:a.x, y1:a.y, x2:b.x, y2:b.y, 'stroke-width':8}, overlay); }
+    } else if (sel.kind === 'conn'){
+      const c = model.conns.find(x => x.id === sel.id);
+      if (c) el('path', {class:'sel-line', d:connPath(c).d, 'stroke-width':9}, overlay);
+    } else if (sel.kind === 'stim'){
+      const s = S(sel.id);
+      if (s) el('circle', {class:'sel-outline', cx:s.x, cy:s.y, r:(s.kind === 'stop' ? STOP_R : STIM_R) + 5}, overlay);
+    } else if (sel.kind === 'ann'){
+      const g = content.querySelector(`[data-kind="ann"][data-id="${sel.id}"]`);
+      if (g){ const bb = g.getBBox(); el('rect', {class:'sel-outline', x:bb.x - 5, y:bb.y - 5, width:bb.width + 10, height:bb.height + 10, transform:g.getAttribute('transform')}, overlay); }
+    }
+  }
+  if (drag && drag.targets) for (const t of drag.targets) el('circle', {class:'target', cx:t.x, cy:t.y, r:t.r}, overlay);
+  if (drag && drag.rubber) el('line', {class:'rubber', x1:drag.rubber.x1, y1:drag.rubber.y1, x2:drag.rubber.x2, y2:drag.rubber.y2}, overlay);
+}
+
+function applyView(){
+  $('viewport').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
+  $('gridPat').setAttribute('patternTransform', `translate(${view.x} ${view.y}) scale(${view.k})`);
+  $('gridRect').style.display = showGrid ? '' : 'none';
+  $('zoomLabel').textContent = Math.round(view.k * 100) + '%';
+  renderOverlay();
+}
+function render(){
+  renderCanvas(); renderProps(); renderChecks();
+  $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length; $('bDel').disabled = !sel;
+  autosave();
+}
+
+/* ===================== Eigenschaften ===================== */
+function bindText(input, set){
+  let before = null;
+  input.addEventListener('focus', () => { before = snapshot(); });
+  input.addEventListener('input', () => { set(input.value); renderCanvas(); renderChecks(); });
+  input.addEventListener('change', () => {
+    if (before != null && snapshot() !== before){ undoStack.push(before); redoStack = []; }
+    before = snapshot(); render();
+  });
+}
+function renderProps(){
+  const box = $('props');
+  if (!sel){ box.innerHTML = '<p class="muted">Kein Element ausgewählt. Ein Element anklicken, um es zu bearbeiten.</p>'; return; }
+  const delBtn = '<div class="row" style="margin-top:12px"><button class="btn danger" id="pDel">Element löschen</button></div>';
+  if (sel.kind === 'node'){
+    const n = N(sel.id); if (!n){ box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <div class="field"><label>Name</label><input type="text" id="pName" value="${esc(n.name)}" placeholder="${n.type === 'activity' ? 'z. B. backen' : 'z. B. Bäckerei'}"></div>
+      ${n.type === 'activity' ? `<p class="muted">Wertaktivität von ${esc(nodeLabel(N(n.parent)))}.</p>` : `
+      <div class="field"><label>Art</label><select id="pType"><option value="actor">Akteur (ein Akteur)</option><option value="segment">Marktsegment (mehrere gleich behandelte Akteure)</option></select></div>
+      ${n.type === 'segment' ? '<div class="field"><label>Stapel zeigt nach</label><select id="pStack"><option value="left">links unten</option><option value="right">rechts unten</option></select></div>' : ''}`}
+      <div class="field"><label>Name steht</label><select id="pNamePos"><option value="top">oberhalb</option><option value="bottom">unterhalb</option></select></div>
+      ${delBtn}`;
+    bindText($('pName'), v => { n.name = v; });
+    $('pNamePos').value = n.namePos || 'top'; $('pNamePos').onchange = e => mutate(() => { n.namePos = e.target.value; });
+    if ($('pType')){ $('pType').value = n.type; $('pType').onchange = e => mutate(() => { n.type = e.target.value; }); }
+    if ($('pStack')){ $('pStack').value = n.stack || 'left'; $('pStack').onchange = e => mutate(() => { n.stack = e.target.value; }); }
+  } else if (sel.kind === 'iface'){
+    const itf = I(sel.id); if (!itf){ box.innerHTML = ''; return; }
+    const rows = itf.ports.map((p, i) => {
+      const ex = model.exchanges.filter(e => e.from === p.id || e.to === p.id), lab = (ex.find(e => e.label) || {}).label || '';
+      return `<div class="portrow"><span class="idx">${i + 1}</span>
+        <select data-i="${i}" class="pDir" ${ex.length ? 'disabled title="Verbundene Ports können nicht umgedreht werden – zuerst den Wertaustausch löschen."' : ''}>
+          <option value="out"${p.dir === 'out' ? ' selected' : ''}>ausgehend</option><option value="in"${p.dir === 'in' ? ' selected' : ''}>eingehend</option></select>
+        <span class="obj" title="${esc(lab)}">${esc(lab.replace(/\n/g, ' '))}</span>
+        <button class="mini pUp" data-i="${i}" ${i ? '' : 'disabled'} title="nach vorn">↑</button>
+        <button class="mini pDown" data-i="${i}" ${i < itf.ports.length - 1 ? '' : 'disabled'} title="nach hinten">↓</button>
+        <button class="mini pRem" data-i="${i}" ${itf.ports.length > 1 ? '' : 'disabled'} title="Port entfernen">✕</button></div>`;
+    }).join('');
+    box.innerHTML = `
+      <p class="muted">Wertschnittstelle von ${esc(nodeLabel(N(itf.owner)))}.</p>
+      <div class="field"><label>Wertports (Reihenfolge wie dargestellt)</label>${rows}</div>
+      <div class="row"><button class="btn" id="pAddOut">+ ausgehend</button><button class="btn" id="pAddIn">+ eingehend</button></div>
+      <p class="muted" style="margin-top:10px">Mehrere Wertobjekte in einer Schnittstelle bilden eine Bündelung: Sie werden nur gemeinsam ausgetauscht.</p>
+      ${delBtn}`;
+    const addPort = dir => mutate(() => { itf.ports.push({id:uid('p'), dir}); });
+    $('pAddOut').onclick = () => addPort('out'); $('pAddIn').onclick = () => addPort('in');
+    box.querySelectorAll('.pDir').forEach(s => s.onchange = () => mutate(() => { itf.ports[+s.dataset.i].dir = s.value; }));
+    box.querySelectorAll('.pUp').forEach(b => b.onclick = () => mutate(() => { const i = +b.dataset.i; [itf.ports[i - 1], itf.ports[i]] = [itf.ports[i], itf.ports[i - 1]]; }));
+    box.querySelectorAll('.pDown').forEach(b => b.onclick = () => mutate(() => { const i = +b.dataset.i; [itf.ports[i + 1], itf.ports[i]] = [itf.ports[i], itf.ports[i + 1]]; }));
+    box.querySelectorAll('.pRem').forEach(b => b.onclick = () => mutate(() => {
+      const pid = itf.ports[+b.dataset.i].id;
+      model.exchanges = model.exchanges.filter(e => e.from !== pid && e.to !== pid);
+      itf.ports.splice(+b.dataset.i, 1);
+    }));
+  } else if (sel.kind === 'exchange'){
+    const e = model.exchanges.find(x => x.id === sel.id); if (!e){ box.innerHTML = ''; return; }
+    const inf = exInfo(e.from, e.to);
+    box.innerHTML = `
+      <div class="field"><label>Wertobjekt</label><textarea id="pLabel" placeholder="z. B. Geld" style="min-height:52px">${esc(e.label || '')}</textarea></div>
+      <p class="muted">${inf.nested ? 'Weiterführung zwischen ' : 'Wertaustausch von '}${esc(nodeLabel(inf.oa))} ${inf.nested ? 'und' : 'nach'} ${esc(nodeLabel(inf.ob))}.${inf.nested ? ' Eine Beschriftung ist hier nicht nötig.' : ''}</p>
+      <div class="row"><button class="btn" id="pLblReset">Beschriftung zurücksetzen</button></div>${delBtn}`;
+    bindText($('pLabel'), v => { e.label = v; });
+    $('pLblReset').onclick = () => mutate(() => { delete e.lx; delete e.ly; });
+  } else if (sel.kind === 'conn'){
+    const c = model.conns.find(x => x.id === sel.id); if (!c){ box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="field"><label>Verlauf des Verbindungselements</label><select id="pStyle">
+      <option value="straight">gerade</option><option value="hv">eckig – erst waagerecht</option><option value="vh">eckig – erst senkrecht</option></select></div>${delBtn}`;
+    $('pStyle').value = c.style || 'straight'; $('pStyle').onchange = ev => mutate(() => { c.style = ev.target.value; });
+  } else if (sel.kind === 'stim'){
+    const s = S(sel.id); if (!s){ box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="field"><label>Stimulus</label><select id="pKind"><option value="start">Start-Stimulus (Auslöser)</option><option value="stop">Stopp-Stimulus (Ende)</option></select></div>
+      <p class="muted">Liegt in ${esc(nodeLabel(N(s.parent)))}.</p>${delBtn}`;
+    $('pKind').value = s.kind; $('pKind').onchange = ev => mutate(() => { s.kind = ev.target.value; });
+  } else if (sel.kind === 'ann'){
+    const a = model.anns.find(x => x.id === sel.id); if (!a){ box.innerHTML = ''; return; }
+    if (a.type === 'note'){
+      box.innerHTML = `<div class="field"><label>Text</label><textarea id="pText">${esc(a.text || '')}</textarea></div>
+        <div class="field"><label>Stil</label><select id="pNStyle"><option value="plain">Text</option><option value="bold">Text, fett</option><option value="red">Text, rot</option><option value="box">Rote Box</option></select></div>
+        <div class="field"><label>Schriftgröße</label><input type="number" id="pSize" min="9" max="48" value="${a.size || 15}"></div>${delBtn}`;
+      bindText($('pText'), v => { a.text = v; });
+      $('pNStyle').value = a.style || 'plain'; $('pNStyle').onchange = ev => mutate(() => { a.style = ev.target.value; });
+      $('pSize').onchange = ev => mutate(() => { a.size = clamp(+ev.target.value || 15, 9, 48); });
+    } else {
+      box.innerHTML = `${a.type === 'arrow' ? `<div class="field"><label>Drehung (Grad)</label><input type="number" id="pRot" step="15" value="${a.rot || 0}"></div>` : ''}
+        <div class="field"><label>Größe</label><input type="number" id="pSize" min="16" max="200" step="4" value="${a.size || (a.type === 'arrow' ? 60 : 36)}"></div>${delBtn}`;
+      if ($('pRot')) $('pRot').onchange = ev => mutate(() => { a.rot = (+ev.target.value || 0) % 360; });
+      $('pSize').onchange = ev => mutate(() => { a.size = clamp(+ev.target.value || 36, 16, 200); });
+    }
+  }
+  if ($('pDel')) $('pDel').onclick = deleteSelection;
+}
+
+/* ===================== Modellprüfung ===================== */
+function runChecks(){
+  const out = [], add = (sev, msg, kind, id) => out.push({sev, msg, kind, id});
+  const m = model;
+  if (!m.nodes.length) return out;
+  for (const n of m.nodes){
+    if (!n.name.trim()) add('warn', `${TYPE_NAME[n.type]} ohne Namen.`, 'node', n.id);
+    if (!m.ifaces.some(i => i.owner === n.id)) add('warn', `${nodeLabel(n)} hat keine Wertschnittstelle und nimmt an keinem Wertaustausch teil.`, 'node', n.id);
+    if (n.type !== 'activity' && !childrenOf(n.id).length) add('info', `${nodeLabel(n)} enthält keine Wertaktivität.`, 'node', n.id);
+  }
+  for (const itf of m.ifaces){
+    const o = N(itf.owner), hasIn = itf.ports.some(p => p.dir === 'in'), hasOut = itf.ports.some(p => p.dir === 'out');
+    if (!hasIn || !hasOut) add('error', `Reziprozität verletzt: Die Wertschnittstelle von ${nodeLabel(o)} braucht mindestens einen eingehenden und einen ausgehenden Wertport.`, 'iface', itf.id);
+    const hasActs = o.type !== 'activity' && childrenOf(o.id).length > 0;
+    itf.ports.forEach((p, i) => {
+      const ex = m.exchanges.filter(e => e.from === p.id || e.to === p.id);
+      const what = `Wertport ${i + 1} (${p.dir === 'out' ? 'ausgehend' : 'eingehend'}) von ${nodeLabel(o)}`;
+      if (o.type === 'activity'){ if (!ex.length) add('warn', `Offener ${what}: kein Wertaustausch.`, 'iface', itf.id); }
+      else {
+        if (!ex.some(e => !isNested(e))) add('warn', `Offener ${what}: kein Wertaustausch mit einem anderen Akteur.`, 'iface', itf.id);
+        if (hasActs && !ex.some(isNested)) add('info', `${what} wird an keine Wertaktivität weitergeführt.`, 'iface', itf.id);
+      }
+    });
+  }
+  for (const e of m.exchanges){
+    const inf = exInfo(e.from, e.to); if (!inf) continue;
+    if (inf.nested ? inf.pa.dir !== inf.pb.dir : inf.pa.dir === inf.pb.dir) add('error', `Wertaustausch zwischen ${nodeLabel(inf.oa)} und ${nodeLabel(inf.ob)} verbindet Ports mit unpassender Richtung.`, 'exchange', e.id);
+    if (!inf.nested && !(e.label || '').trim()) add('error', `Wertaustausch zwischen ${nodeLabel(inf.oa)} und ${nodeLabel(inf.ob)} hat kein Wertobjekt.`, 'exchange', e.id);
+  }
+  // Wertszenario
+  const starts = m.stimuli.filter(s => s.kind === 'start'), stops = m.stimuli.filter(s => s.kind === 'stop');
+  if (!starts.length) add('warn', 'Kein Start-Stimulus: Das Wertszenario hat keinen Auslöser.');
+  if (!stops.length) add('warn', 'Kein Stopp-Stimulus: Das Wertszenario hat kein Ende.');
+  const key = ep => ep.kind + ':' + ep.id, adj = new Map();
+  const link = (a, b) => { (adj.get(a) || adj.set(a, []).get(a)).push(b); (adj.get(b) || adj.set(b, []).get(b)).push(a); };
+  m.conns.forEach(c => link(key(c.a), key(c.b)));
+  m.exchanges.forEach(e => { const a = ifaceOfPort(e.from), b = ifaceOfPort(e.to); if (a && b) link('iface:' + a.id, 'iface:' + b.id); });
+  const reach = from => { const seen = new Set([from]), q = [from]; while (q.length) for (const nx of adj.get(q.pop()) || []) if (!seen.has(nx)){ seen.add(nx); q.push(nx); } return seen; };
+  for (const s of m.stimuli){
+    const nm = s.kind === 'start' ? 'Start-Stimulus' : 'Stopp-Stimulus', where = nodeLabel(N(s.parent));
+    if (!adj.has('stim:' + s.id)){ add('warn', `${nm} in ${where} ist nicht über ein Verbindungselement angebunden.`, 'stim', s.id); continue; }
+    const r = reach('stim:' + s.id);
+    if (s.kind === 'start' && stops.length && !stops.some(t => r.has('stim:' + t.id))) add('error', `Das Wertszenario ab dem Start-Stimulus in ${where} erreicht keinen Stopp-Stimulus.`, 'stim', s.id);
+    if (s.kind === 'stop' && starts.length && !starts.some(t => r.has('stim:' + t.id))) add('warn', `Der Stopp-Stimulus in ${where} wird von keinem Start-Stimulus erreicht.`, 'stim', s.id);
+  }
+  if (m.stimuli.length) for (const itf of m.ifaces){
+    const o = N(itf.owner);
+    const forwarded = itf.ports.some(p => m.exchanges.some(e => (e.from === p.id || e.to === p.id) && isNested(e) && o.type !== 'activity'));
+    if (!forwarded && !adj.has('iface:' + itf.id) ) add('info', `Die Wertschnittstelle von ${nodeLabel(o)} ist in kein Wertszenario eingebunden (kein Verbindungselement).`, 'iface', itf.id);
+    else if (!forwarded && !m.conns.some(c => (c.a.kind === 'iface' && c.a.id === itf.id) || (c.b.kind === 'iface' && c.b.id === itf.id))) add('info', `Die Wertschnittstelle von ${nodeLabel(o)} ist in kein Wertszenario eingebunden (kein Verbindungselement).`, 'iface', itf.id);
+  }
+  const order = {error:0, warn:1, info:2};
+  return out.sort((a, b) => order[a.sev] - order[b.sev]);
+}
+function renderChecks(){
+  const res = runChecks(), sum = $('checkSummary'), list = $('checks');
+  const cnt = s => res.filter(r => r.sev === s).length;
+  if (!model.nodes.length){ sum.innerHTML = '<span class="muted" style="font-weight:400">Noch kein Modell vorhanden.</span>'; list.innerHTML = ''; return; }
+  sum.innerHTML = !res.length ? '<span style="color:var(--ok)">✓ Keine Auffälligkeiten</span>'
+    : `<span>${cnt('error')} Fehler · ${cnt('warn')} Warnungen · ${cnt('info')} Hinweise</span>`;
+  const tag = {error:'Fehler', warn:'Warnung', info:'Hinweis'};
+  list.innerHTML = res.map((r, i) => `<button class="issue ${r.sev}" data-i="${i}"><span class="tag">${tag[r.sev]}</span><span>${esc(r.msg)}</span></button>`).join('');
+  list.querySelectorAll('.issue').forEach(b => b.onclick = () => { const r = res[+b.dataset.i]; if (r.kind){ sel = {kind:r.kind, id:r.id}; render(); revealSelection(); } });
+}
+function revealSelection(){
+  const o = overlay.firstChild; if (!o) return;
+  const bb = o.getBBox(), r = svg.getBoundingClientRect();
+  const cx = (bb.x + bb.width / 2) * view.k + view.x, cy = (bb.y + bb.height / 2) * view.k + view.y;
+  if (cx < 40 || cy < 40 || cx > r.width - 40 || cy > r.height - 40){ view.x += r.width / 2 - cx; view.y += r.height / 2 - cy; applyView(); }
+}
+
+/* ===================== Hinweise / Inline-Editor ===================== */
+let toastTimer;
+function toast(msg, info){
+  const t = $('toast'); t.textContent = msg; t.className = info ? 'info' : ''; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.display = 'none'; }, info ? 2500 : 5200);
+}
+let inlineState = null;
+function inlineEdit(o){
+  closeInline(true);
+  const ta = $('inlineEdit');
+  ta.value = o.value || ''; ta.placeholder = o.placeholder || '';
+  ta.style.fontSize = (o.size || 15) * view.k + 'px'; ta.style.fontWeight = o.bold ? 700 : 400;
+  ta.style.textAlign = o.center ? 'center' : 'left';
+  const w = Math.max(150, (o.width || 150) * view.k);
+  ta.style.width = w + 'px';
+  ta.style.left = (o.x * view.k + view.x - (o.center ? w / 2 : 0)) + 'px';
+  ta.style.top = (o.y * view.k + view.y) + 'px';
+  ta.style.display = 'block';
+  inlineState = o;
+  const fitH = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 4 + 'px'; };
+  ta.oninput = fitH; fitH();
+  setTimeout(() => { ta.focus(); ta.select(); }, 0);
+}
+function closeInline(commit){
+  if (!inlineState) return;
+  const o = inlineState, v = $('inlineEdit').value;
+  inlineState = null; $('inlineEdit').blur(); $('inlineEdit').style.display = 'none';
+  if (commit) mutate(() => o.commit(v));
+}
+$('inlineEdit').addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); closeInline(true); }
+  else if (e.key === 'Escape'){ e.preventDefault(); closeInline(false); }
+});
+$('inlineEdit').addEventListener('blur', () => closeInline(true));
+$('inlineEdit').addEventListener('pointerdown', e => e.stopPropagation());
+
+function editNodeName(n){
+  const act = n.type === 'activity';
+  inlineEdit({x: n.x + (act ? 2 : -2), y: nameY(n) - (act ? 20 : 21), value:n.name, size: act ? 15 : 16, bold:!act, width:n.w,
+    placeholder: act ? 'Was tut der Akteur?' : 'Name', commit: v => { const t = N(n.id); if (t) t.name = v.replace(/\n/g, ' ').trim(); }});
+}
+function editExchangeLabel(e){
+  const p = exLabelPos(e);
+  inlineEdit({x:p.x, y:p.y - 20, value:e.label || '', size:13.5, center:true, width:150, placeholder:'Wertobjekt',
+    commit: v => { const t = model.exchanges.find(x => x.id === e.id); if (t) t.label = v.trim(); }});
+}
+function editNote(a){
+  inlineEdit({x:a.x - 4, y:a.y - 2, value:a.text || '', size:a.size || 15, width:220, placeholder:'Text',
+    commit: v => { const t = model.anns.find(x => x.id === a.id); if (t) t.text = v.trim() || 'Notiz'; }});
+}
+
+/* ===================== Werkzeuge ===================== */
+function setTool(t){
+  tool = t;
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  svg.classList.toggle('placing', t !== 'select');
+  $('hint').textContent = TOOLS.find(x => x.id === t).hint;
+}
+function buildPalette(){
+  const pal = $('palette');
+  for (const t of TOOLS){
+    if (t.group){ const h = document.createElement('h3'); h.textContent = t.group; pal.appendChild(h); continue; }
+    const b = document.createElement('button');
+    b.className = 'tool'; b.dataset.tool = t.id;
+    b.innerHTML = `<svg viewBox="0 0 34 26">${t.icon}</svg><span>${t.label}</span>${t.key ? `<kbd>${t.key}</kbd>` : ''}`;
+    b.onclick = () => setTool(t.id);
+    pal.appendChild(b);
+  }
+}
+
+function place(kind, p, ev){
+  let created = null;
+  if (kind === 'actor' || kind === 'segment'){
+    mutate(() => { created = {id:uid('n'), type:kind, name:'', x:snapG(p.x - 130, ev), y:snapG(p.y - 95, ev), w:260, h:190, parent:null, stack:'left'};
+      model.nodes.push(created); sel = {kind:'node', id:created.id}; });
+    setTool('select'); editNodeName(created);
+  } else if (kind === 'activity'){
+    const par = actorAt(p);
+    if (!par) return toast('Eine Wertaktivität wird von einem Akteur ausgeführt – bitte in einen Akteur oder ein Marktsegment klicken.');
+    mutate(() => {
+      const w = Math.min(170, par.w - 40), h = Math.min(110, par.h - 40);
+      created = {id:uid('n'), type:'activity', name:'', parent:par.id, w, h,
+        x: clamp(snapG(p.x - w / 2, ev), par.x, par.x + par.w - w), y: clamp(snapG(p.y - h / 2, ev), par.y, par.y + par.h - h)};
+      model.nodes.push(created); sel = {kind:'node', id:created.id};
+    });
+    setTool('select'); editNodeName(created);
+  } else if (kind === 'iface'){
+    const hit = nearestEdge(p, model.nodes);
+    if (!hit || hit.d > 40) return toast('Wertschnittstellen sitzen auf dem Rand eines Akteurs oder einer Wertaktivität – bitte nahe an einen Rand klicken.');
+    // Portreihenfolge je Seite so wählen, dass gegenüberliegende Schnittstellen ohne Kreuzung zusammenpassen
+    const dirs = (hit.side === 'right' || hit.side === 'bottom') ? ['out', 'in'] : ['in', 'out'];
+    mutate(() => { created = {id:uid('i'), owner:hit.node.id, side:hit.side, off:Math.round(hit.off / 5) * 5, ports:dirs.map(dir => ({id:uid('p'), dir}))};
+      model.ifaces.push(created); sel = {kind:'iface', id:created.id}; });
+    setTool('select');
+  } else if (kind === 'start' || kind === 'stop'){
+    const par = activityAt(p) || actorAt(p);
+    if (!par) return toast('Ein Stimulus liegt innerhalb einer Wertaktivität bzw. eines Akteurs – bitte dort hineinklicken.');
+    mutate(() => { created = {id:uid('s'), kind, parent:par.id, x:clamp(p.x, par.x + STOP_R, par.x + par.w - STOP_R), y:clamp(p.y, par.y + STOP_R, par.y + par.h - STOP_R)};
+      model.stimuli.push(created); sel = {kind:'stim', id:created.id}; });
+    setTool('select');
+  } else {
+    mutate(() => {
+      created = {id:uid('a'), type:kind, x:Math.round(p.x), y:Math.round(p.y), rot:0};
+      if (kind === 'note'){ created.text = 'Notiz'; created.style = 'bold'; created.size = 15; }
+      if (kind === 'arrow'){ created.size = 60; created.rot = -45; }
+      if (kind === 'cross') created.size = 36;
+      model.anns.push(created); sel = {kind:'ann', id:created.id};
+    });
+    setTool('select');
+    if (kind === 'note') editNote(created);
+  }
+}
+
+/* ===================== Zeigerinteraktion ===================== */
+function toModel(e){ const r = svg.getBoundingClientRect(); return {x:(e.clientX - r.left - view.x) / view.k, y:(e.clientY - r.top - view.y) / view.k}; }
+function descendants(id){
+  const acts = childrenOf(id), ids = new Set([id, ...acts.map(a => a.id)]);
+  return {nodes:acts, stims:model.stimuli.filter(s => ids.has(s.parent))};
+}
+function childBounds(n){
+  let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+  for (const c of childrenOf(n.id)){ l = Math.min(l, c.x); t = Math.min(t, c.y); r = Math.max(r, c.x + c.w); b = Math.max(b, c.y + c.h); }
+  for (const s of model.stimuli.filter(s => s.parent === n.id)){ l = Math.min(l, s.x - STOP_R); t = Math.min(t, s.y - STOP_R); r = Math.max(r, s.x + STOP_R); b = Math.max(b, s.y + STOP_R); }
+  return {l, t, r, b};
+}
+function capture(e){ try { svg.setPointerCapture(e.pointerId); } catch (err){} }
+function startPan(e){ drag = {type:'pan', sx:e.clientX, sy:e.clientY, vx:view.x, vy:view.y}; svg.classList.add('panning'); }
+
+function portNear(p){
+  let best = null;
+  for (const itf of model.ifaces) for (const q of ifaceGeom(itf).ports){ const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < 15 && (!best || d < best.d)) best = {id:q.id, d}; }
+  return best && best.id;
+}
+function endNear(p){
+  for (const s of model.stimuli) if (Math.hypot(s.x - p.x, s.y - p.y) < STOP_R + 5) return {kind:'stim', id:s.id};
+  for (const itf of model.ifaces){ const g = ifaceGeom(itf); if (Math.abs(p.x - g.cx) < g.w / 2 + 7 && Math.abs(p.y - g.cy) < g.h / 2 + 7) return {kind:'iface', id:itf.id}; }
+  return null;
+}
+
+svg.addEventListener('pointerdown', e => {
+  closeInline(true);
+  if (e.button === 1){ e.preventDefault(); capture(e); return startPan(e); }
+  if (e.button !== 0) return;
+  const p = toModel(e), tEl = e.target.closest('[data-kind]');
+  const kind = tEl ? tEl.dataset.kind : null, id = tEl ? tEl.dataset.id : null;
+  const now = performance.now(), dbl = !!kind && lastDown && now - lastDown.t < 400 && lastDown.kind === kind && lastDown.id === id;
+  lastDown = dbl ? null : {t:now, kind, id};
+  capture(e);
+
+  if (PLACE.has(tool)) return place(tool, p, e);
+
+  if (tool === 'exchange'){
+    if (kind !== 'port'){ if (!kind){ sel = null; render(); startPan(e); } else toast('Wertaustausch: auf einem Wertport (Dreieck) beginnen und zu einem anderen Wertport ziehen.', true); return; }
+    const a = portPos(id), targets = [];
+    for (const itf of model.ifaces) for (const q of ifaceGeom(itf).ports) if (q.id !== id && !checkExchange(id, q.id)) targets.push({x:q.x, y:q.y, r:10});
+    drag = {type:'exchange', from:id, before:snapshot(), targets, rubber:{x1:a.x, y1:a.y, x2:p.x, y2:p.y}};
+    return renderOverlay();
+  }
+  if (tool === 'connect'){
+    const a = kind === 'stim' ? {kind:'stim', id} : kind === 'iface' ? {kind:'iface', id} : kind === 'port' ? {kind:'iface', id:ifaceOfPort(id).id} : null;
+    if (!a){ if (!kind){ sel = null; render(); startPan(e); } else toast('Verbindungselement: auf einem Stimulus oder einer Wertschnittstelle beginnen.', true); return; }
+    const c = endCenter(a), targets = [];
+    for (const s of model.stimuli){ const b = {kind:'stim', id:s.id}; if (!checkConn(a, b)) targets.push({x:s.x, y:s.y, r:STOP_R + 3}); }
+    for (const itf of model.ifaces){ const b = {kind:'iface', id:itf.id}; if (!checkConn(a, b)){ const g = ifaceGeom(itf); targets.push({x:g.cx, y:g.cy, r:14}); } }
+    drag = {type:'connect', from:a, targets, rubber:{x1:c.x, y1:c.y, x2:p.x, y2:p.y}};
+    return renderOverlay();
+  }
+
+  // Auswahlwerkzeug
+  if (kind === 'handle'){
+    const n = N(sel.id);
+    drag = {type:'resize', id:n.id, h:id, p0:p, o:{x:n.x, y:n.y, w:n.w, h:n.h}, before:snapshot()};
+    return;
+  }
+  if (!kind){ if (sel){ sel = null; render(); } return startPan(e); }
+  if (dbl){
+    if (kind === 'node') return editNodeName(N(id));
+    if (kind === 'exchange') return editExchangeLabel(model.exchanges.find(x => x.id === id));
+    if (kind === 'ann'){ const a = model.anns.find(x => x.id === id); if (a.type === 'note') return editNote(a); }
+    if (kind === 'port'){
+      if (model.exchanges.some(x => x.from === id || x.to === id)) return toast('Dieser Wertport ist verbunden. Zum Umdrehen zuerst den Wertaustausch löschen.');
+      return mutate(() => { const pt = portById(id); pt.dir = pt.dir === 'out' ? 'in' : 'out'; });
+    }
+  }
+  const before = snapshot();
+  if (kind === 'node'){
+    const n = N(id), d = descendants(id);
+    sel = {kind:'node', id};
+    drag = {type:'move', id, p0:p, o:{x:n.x, y:n.y}, kids:d.nodes.map(c => ({c, x:c.x, y:c.y})), stims:d.stims.map(s => ({s, x:s.x, y:s.y})), before};
+  } else if (kind === 'iface' || kind === 'port'){
+    const iid = kind === 'port' ? ifaceOfPort(id).id : id;
+    const g0 = ifaceGeom(I(iid));
+    sel = {kind:'iface', id:iid}; drag = {type:'iface', id:iid, p0:p, gx:g0.cx - p.x, gy:g0.cy - p.y, moved:false, before};
+  } else if (kind === 'stim'){
+    const s = S(id); sel = {kind:'stim', id}; drag = {type:'stim', id, dx:s.x - p.x, dy:s.y - p.y, before};
+  } else if (kind === 'exchange'){
+    const ex = model.exchanges.find(x => x.id === id);
+    sel = {kind:'exchange', id};
+    if (e.target.closest('text')) drag = {type:'exlabel', id, p0:p, lx:ex.lx || 0, ly:ex.ly == null ? -7 : ex.ly, before};
+  } else if (kind === 'conn'){ sel = {kind:'conn', id};
+  } else if (kind === 'ann'){
+    const a = model.anns.find(x => x.id === id); sel = {kind:'ann', id}; drag = {type:'ann', id, dx:a.x - p.x, dy:a.y - p.y, before};
+  }
+  render();
+});
+
+svg.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const p = toModel(e);
+  switch (drag.type){
+    case 'pan': view.x = drag.vx + e.clientX - drag.sx; view.y = drag.vy + e.clientY - drag.sy; return applyView();
+    case 'exchange': case 'connect': drag.rubber.x2 = p.x; drag.rubber.y2 = p.y; return renderOverlay();
+    case 'move': {
+      const n = N(drag.id); let nx = snapG(drag.o.x + p.x - drag.p0.x, e), ny = snapG(drag.o.y + p.y - drag.p0.y, e);
+      if (n.parent){ const par = N(n.parent); nx = clamp(nx, par.x, par.x + par.w - n.w); ny = clamp(ny, par.y, par.y + par.h - n.h); }
+      const dx = nx - drag.o.x, dy = ny - drag.o.y;
+      n.x = nx; n.y = ny;
+      drag.kids.forEach(k => { k.c.x = k.x + dx; k.c.y = k.y + dy; });
+      drag.stims.forEach(k => { k.s.x = k.x + dx; k.s.y = k.y + dy; });
+      break;
+    }
+    case 'resize': {
+      const n = N(drag.id), o = drag.o, h = drag.h, dx = p.x - drag.p0.x, dy = p.y - drag.p0.y, cb = childBounds(n);
+      const minW = n.type === 'activity' ? 60 : 90, minH = n.type === 'activity' ? 44 : 70;
+      let L = o.x, T = o.y, R = o.x + o.w, B = o.y + o.h;
+      const par = n.parent ? N(n.parent) : null;
+      if (h.includes('w')){ L = Math.min(snapG(o.x + dx, e), R - minW, cb.l); if (par) L = Math.max(L, par.x); }
+      if (h.includes('e')){ R = Math.max(snapG(o.x + o.w + dx, e), L + minW, cb.r); if (par) R = Math.min(R, par.x + par.w); }
+      if (h.includes('n')){ T = Math.min(snapG(o.y + dy, e), B - minH, cb.t); if (par) T = Math.max(T, par.y); }
+      if (h.includes('s')){ B = Math.max(snapG(o.y + o.h + dy, e), T + minH, cb.b); if (par) B = Math.min(B, par.y + par.h); }
+      n.x = L; n.y = T; n.w = R - L; n.h = B - T;
+      break;
+    }
+    case 'iface': {
+      if (!drag.moved && Math.hypot(p.x - drag.p0.x, p.y - drag.p0.y) < 4 / view.k) return;
+      drag.moved = true;
+      const itf = I(drag.id), hit = nearestEdge({x:p.x + drag.gx, y:p.y + drag.gy}, [N(itf.owner)]);
+      itf.side = hit.side; itf.off = e.altKey ? Math.round(hit.off) : Math.round(hit.off / 5) * 5;
+      break;
+    }
+    case 'stim': {
+      const s = S(drag.id), par = N(s.parent);
+      s.x = clamp(Math.round(p.x + drag.dx), par.x + STOP_R, par.x + par.w - STOP_R);
+      s.y = clamp(Math.round(p.y + drag.dy), par.y + STOP_R, par.y + par.h - STOP_R);
+      break;
+    }
+    case 'exlabel': { const ex = model.exchanges.find(x => x.id === drag.id); ex.lx = Math.round(drag.lx + p.x - drag.p0.x); ex.ly = Math.round(drag.ly + p.y - drag.p0.y); break; }
+    case 'ann': { const a = model.anns.find(x => x.id === drag.id); a.x = Math.round(p.x + drag.dx); a.y = Math.round(p.y + drag.dy); break; }
+  }
+  renderCanvas();
+});
+
+function endDrag(e){
+  if (!drag) return;
+  const d = drag, p = toModel(e); drag = null;
+  svg.classList.remove('panning');
+  if (d.type === 'pan') return;
+  if (d.type === 'exchange'){
+    const to = portNear(p);
+    if (!to || to === d.from){ renderOverlay(); return; }
+    const err = checkExchange(d.from, to);
+    if (err){ renderOverlay(); return toast(err); }
+    let ex;
+    mutate(() => {
+      const inf = exInfo(d.from, to);
+      let from = d.from, dest = to;
+      if (inf.nested ? (inf.pa.dir === 'out') !== (inf.oa.type === 'activity') : inf.pa.dir === 'in'){ from = to; dest = d.from; }
+      ex = {id:uid('e'), from, to:dest, label:''};
+      const fi = ifaceOfPort(from), idx = fi.ports.findIndex(q => q.id === from);
+      if (fi.ports.length === 2 && idx === 1) ex.ly = 17;
+      model.exchanges.push(ex); sel = {kind:'exchange', id:ex.id};
+    });
+    if (!isNested(ex)) editExchangeLabel(ex);
+    return;
+  }
+  if (d.type === 'connect'){
+    const b = endNear(p);
+    if (!b || sameEnd(b, d.from)){ renderOverlay(); return; }
+    const err = checkConn(d.from, b);
+    if (err){ renderOverlay(); return toast(err); }
+    return mutate(() => { const c = {id:uid('c'), a:d.from, b, style:'straight'}; model.conns.push(c); sel = {kind:'conn', id:c.id}; });
+  }
+  if (d.before && snapshot() !== d.before){ undoStack.push(d.before); redoStack = []; }
+  render();
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = svg.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+}, {passive:false});
+function zoomAt(sx, sy, f){
+  const k = clamp(view.k * f, 0.2, 4);
+  view.x = sx - (sx - view.x) * (k / view.k); view.y = sy - (sy - view.y) * (k / view.k); view.k = k;
+  closeInline(true); applyView();
+}
+function fit(){
+  const r = svg.getBoundingClientRect();
+  if (!content.childNodes.length){ view = {x:60, y:60, k:1}; return applyView(); }
+  const bb = content.getBBox(), k = clamp(Math.min((r.width - 80) / bb.width, (r.height - 80) / bb.height), 0.2, 1.5);
+  view = {k, x:(r.width - bb.width * k) / 2 - bb.x * k, y:(r.height - bb.height * k) / 2 - bb.y * k};
+  applyView();
+}
+
+/* ===================== Tastatur ===================== */
+window.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 's'){ e.preventDefault(); return saveFile(); }
+  if (typing) return;
+  if (mod && e.key.toLowerCase() === 'z'){ e.preventDefault(); return e.shiftKey ? redo() : undo(); }
+  if (mod && e.key.toLowerCase() === 'y'){ e.preventDefault(); return redo(); }
+  if (mod) return;
+  if (e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); return deleteSelection(); }
+  if (e.key === 'Escape'){ drag = null; setTool('select'); return renderOverlay(); }
+  if (e.key === 'F2' && sel && sel.kind === 'node') return editNodeName(N(sel.id));
+  const t = TOOLS.find(x => x.key && x.key.toLowerCase() === e.key.toLowerCase());
+  if (t) setTool(t.id);
+});
+
+/* ===================== Datei / Export ===================== */
+const fileBase = () => ($('title').value.trim() || 'e3value-modell').replace(/[\\/:*?"<>|]+/g, '_');
+function download(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function saveFile(){
+  const data = JSON.stringify({format:'e3value-editor', version:1, title:$('title').value, model}, null, 2);
+  const blob = new Blob([data], {type:'application/json'}), name = fileBase() + '.e3v.json';
+  if (window.showSaveFilePicker){
+    try {
+      const h = await showSaveFilePicker({suggestedName:name, types:[{description:'e3value-Modell', accept:{'application/json':['.json']}}]});
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      return toast('Modell gespeichert.', true);
+    } catch (err){ if (err && err.name === 'AbortError') return; }
+  }
+  download(blob, name);
+}
+function normalize(m){
+  const b = emptyModel();
+  for (const k of Object.keys(b)) if (k !== 'seq') b[k] = Array.isArray(m[k]) ? m[k] : [];
+  b.seq = Math.max(1, +m.seq || 1);
+  const ids = new Set(b.nodes.map(n => n.id));
+  b.nodes.forEach(n => { n.name = n.name || ''; if (n.parent && !ids.has(n.parent)) n.parent = null; });
+  b.nodes = b.nodes.filter(n => n.type !== 'activity' || n.parent);
+  const nid = new Set(b.nodes.map(n => n.id));
+  b.ifaces = b.ifaces.filter(i => nid.has(i.owner) && Array.isArray(i.ports) && i.ports.length);
+  b.stimuli = b.stimuli.filter(s => nid.has(s.parent));
+  const pids = new Set(b.ifaces.flatMap(i => i.ports.map(p => p.id))), iids = new Set(b.ifaces.map(i => i.id)), sids = new Set(b.stimuli.map(s => s.id));
+  b.exchanges = b.exchanges.filter(e => pids.has(e.from) && pids.has(e.to));
+  const okEnd = ep => ep && (ep.kind === 'stim' ? sids.has(ep.id) : iids.has(ep.id));
+  b.conns = b.conns.filter(c => okEnd(c.a) && okEnd(c.b));
+  // Zähler über alle vorhandenen IDs anheben
+  const all = JSON.stringify(b).match(/"[a-z](\d+)"/g) || [];
+  for (const s of all) b.seq = Math.max(b.seq, +s.replace(/\D/g, '') + 1);
+  return b;
+}
+function loadData(obj){
+  if (!obj || obj.format !== 'e3value-editor' || !obj.model) throw new Error('Kein e3value-Editor-Modell.');
+  model = normalize(obj.model); $('title').value = obj.title || 'Unbenanntes Modell';
+  sel = null; undoStack = []; redoStack = []; render(); fit();
+}
+$('fileIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try { loadData(JSON.parse(await f.text())); toast('Modell geladen.', true); }
+  catch (err){ toast('Die Datei konnte nicht gelesen werden: ' + err.message); }
+});
+function exportSvgString(){
+  if (!content.childNodes.length) return null;
+  const bb = content.getBBox(), pad = 24;
+  const clone = content.cloneNode(true);
+  clone.querySelectorAll('.hit').forEach(n => n.remove());
+  clone.querySelectorAll('[data-kind]').forEach(n => { n.removeAttribute('data-kind'); n.removeAttribute('data-id'); });
+  const x = Math.floor(bb.x - pad), y = Math.floor(bb.y - pad), w = Math.ceil(bb.width + pad * 2), h = Math.ceil(bb.height + pad * 2);
+  const inner = new XMLSerializer().serializeToString(clone);
+  return {w, h, str:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}"><style>${DIAGRAM_CSS}</style><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff"/>${inner}</svg>`};
+}
+function exportSvg(){
+  const s = exportSvgString(); if (!s) return toast('Das Modell ist leer.');
+  download(new Blob([s.str], {type:'image/svg+xml'}), fileBase() + '.svg');
+}
+function exportPng(){
+  const s = exportSvgString(); if (!s) return toast('Das Modell ist leer.');
+  const img = new Image(), scale = 2;
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = s.w * scale; c.height = s.h * scale;
+    const ctx = c.getContext('2d'); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0, s.w, s.h);
+    c.toBlob(b => download(b, fileBase() + '.png'), 'image/png');
+  };
+  img.onerror = () => toast('Der PNG-Export ist fehlgeschlagen.');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s.str);
+}
+function autosave(){ try { localStorage.setItem('e3v-autosave', JSON.stringify({format:'e3value-editor', version:1, title:$('title').value, model})); } catch (e){} }
+
+/* ===================== Start ===================== */
+$('bNew').onclick = () => {
+  if ((model.nodes.length || model.anns.length) && !confirm('Aktuelles Modell verwerfen und ein neues beginnen?')) return;
+  model = emptyModel(); sel = null; undoStack = []; redoStack = []; $('title').value = 'Unbenanntes Modell'; view = {x:60, y:60, k:1}; applyView(); render();
+};
+$('bOpen').onclick = () => $('fileIn').click();
+$('bSave').onclick = saveFile;
+$('bPng').onclick = exportPng; $('bSvg').onclick = exportSvg;
+$('bUndo').onclick = undo; $('bRedo').onclick = redo; $('bDel').onclick = deleteSelection;
+$('bZoomIn').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.2); };
+$('bZoomOut').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1 / 1.2); };
+$('bFit').onclick = fit;
+$('bGrid').onclick = () => { showGrid = !showGrid; $('bGrid').classList.toggle('on', showGrid); applyView(); };
+$('bHelp').onclick = () => $('help').showModal();
+$('helpClose').onclick = () => $('help').close();
+$('title').addEventListener('change', autosave);
+
+buildPalette(); setTool('select'); applyView();
+try {
+  const saved = localStorage.getItem('e3v-autosave');
+  if (saved){ const o = JSON.parse(saved); model = normalize(o.model); $('title').value = o.title || 'Unbenanntes Modell'; }
+} catch (e){}
+render();
+if (model.nodes.length) fit();
+</script>
+</body>
+</html>
